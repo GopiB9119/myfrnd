@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Water droplet body -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,28 C54,28 36,50 36,63 C36,73 44,81 54,81 C64,81 72,73 72,63 C72,50 54,28 54,28 Z" />
+    <!-- Droplet inner glow/reflection -->
+    <path
+        android:fillColor="#A7F3D0"
+        android:pathData="M44,56 C44,51 49,46 54,40 C51,46 51,52 48,56 C46,58 44,58 44,56 Z" />
+    <!-- Golden task checkmark arc -->
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M45,64 L52,71 L67,52" />
+</vector>

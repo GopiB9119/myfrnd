@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Essential: Display over other apps (WindowManager TYPE_APPLICATION_OVERLAY) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground Service permissions (Android 9+ and Android 14+ SPECIAL_USE) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Notification permission for Android 13+ (API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Wake lock to ensure evaluation timers fire accurately -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Alarms & Device Boot Recovery -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- OpenGL ES 3.0+ hardware requirement for Google Filament -->
+    <uses-feature
+        android:glEsVersion="0x00030000"
+        android:required="true" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Companion"
+        tools:targetApi="36">
+
+        <!-- Main Activity: Interactive Onboarding, Permissions & Interval Setup Dashboard -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Companion">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Foreground Service with Android 14 SPECIAL_USE property -->
+        <service
+            android:name=".service.OverlayService"
+            android:enabled="true"
+            android:exported="true"
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ExportedService">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Interactive companion providing real-time screen-time eye breaks, hydration alerts, notes, and task reminders." />
+            <intent-filter>
+                <action android:name="com.myfrnd.app.ACTION_TRIGGER_WATER" />
+                <action android:name="com.myfrnd.app.ACTION_TRIGGER_EYE_STRAIN" />
+                <action android:name="com.myfrnd.app.ACTION_DEMO_NOW" />
+                <action android:name="com.myfrnd.app.ACTION_STOP_SERVICE" />
+            </intent-filter>
+        </service>
+
+        <!-- Boot Receiver to revive the Foreground Service on device restart -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>
