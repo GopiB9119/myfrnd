@@ -15,7 +15,8 @@
         <TextView style="@style/BodyText" android:text="@string/when_label"
             android:layout_marginTop="16dp" />
         <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:scrollbars="none">
+            android:layout_marginTop="8dp" android:scrollbars="none"
+            android:requiresFadingEdge="horizontal" android:fadingEdgeLength="@dimen/chip_row_fade">
             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
                 <Button android:id="@+id/pillIn15Min" style="@style/Choice" android:text="@string/in_fifteen_minutes" />
                 <Button android:id="@+id/pillIn1Hour" style="@style/Choice" android:text="@string/in_one_hour" />

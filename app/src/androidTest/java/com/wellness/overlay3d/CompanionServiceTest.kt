@@ -68,12 +68,13 @@ class CompanionServiceTest {
     @Test fun allSimultaneousTasksAreActuallyDisplayedSequentially() {
         start()
         scenario.onActivity {
-            val due = System.currentTimeMillis() + 1_000L
+            // One shared due time; the margin keeps all three adds in the future on a loaded device.
+            val due = System.currentTimeMillis() + 5_000L
             repeat(3) { index ->
                 TaskManager.addReminder(it, TaskReminder("task-$index", "Task $index", due))
             }
         }
-        waitUntil { TaskManager.getPendingReminders(context).size == 2 }
+        waitUntil(20_000L) { TaskManager.getPendingReminders(context).size == 2 }
         assertEquals(listOf("task-1", "task-2"), TaskManager.getPendingReminders(context).map { it.id })
         // The original implementation marked every due task triggered before showing only the first.
         SystemClock.sleep(500L)

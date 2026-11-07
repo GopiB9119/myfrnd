@@ -1,6 +1,6 @@
 # Upgrade verification
 
-Verified locally on 2026-11-06 and 2026-11-07 against the upgraded working tree based on original commit `4873c66`. The second pass (2026-11-07) re-audited the release APK built from the project as found and a live Android 16 emulator with the REA reverse-engineering toolkit, fixed the defects it found, and re-measured release against release. This report distinguishes tested behavior from remaining release requirements. No production deployment or GitHub push was performed.
+Verified locally on 2026-11-06 and 2026-11-07 against the upgraded working tree based on original commit `4873c66`. The second pass (2026-11-07) re-audited the release APK built from the project as found and a live Android 16 emulator with the REA reverse-engineering toolkit, fixed the defects it found, and re-measured release against release. This report distinguishes tested behavior from remaining release requirements. A third pass (iteration 2, below) closed six more audit items on the branch `upgrade/production-hardening-20261107`. That branch is committed locally and waits to be pushed by an account with write access to the repository (the push from this machine was refused with HTTP 403). Nothing was merged into `main`, signed or deployed.
 
 ## Result
 
@@ -9,8 +9,9 @@ Verified locally on 2026-11-06 and 2026-11-07 against the upgraded working tree 
 | Scheduler unit tests | 10 passed |
 | Storage/model unit tests | 11 passed |
 | Notification-permission flow unit tests | 4 passed |
+| Reminder preset unit tests (iteration 2) | 5 passed |
 | Android dashboard/service tests | 17 passed |
-| Total | **42 passed; zero failures, errors, or skipped tests** |
+| Total | **47 passed; zero failures, errors, or skipped tests** (iteration 2 clean build; 42 before it) |
 | Android lint | **0 errors, 34 warnings** |
 | Debug APK | Built and exercised on Android 16 |
 | Release APK and AAB | Built successfully with R8 code and resource shrinking; **unsigned** |
@@ -49,6 +50,31 @@ Generated reports are local build outputs and can be regenerated:
 
 The connected XML suite uses the name `CompanionServiceTest`, but contains all 17 cases from both Android test classes (10 dashboard, 7 service). The [GitHub workflow](../.github/workflows/android.yml) has been added, not run remotely; it covers the debug and release builds, unit tests and lint, not emulator tests.
 
+## Iteration 2: open audit items closed (2026-11-07)
+
+Six items from the open-item table of the evidence pack's `GAP-REPORT.md` were fixed on the branch `upgrade/production-hardening-20261107`. Every row below was checked on the Android 16 emulator (1080 x 2400, density 420, hardware GPU). Screenshots, logs and app data are in the folder `myfrnd-evidence-iteration2`, next to the evidence pack.
+
+| Item | Change | Evidence |
+| --- | --- | --- |
+| U3: the editor's time chips showed no selection | New reminders start on **In 1 hour**, and that chip is shown as selected (`isSelected` plus a "Selected"/"Not selected" state description for TalkBack). Choosing a custom date and time clears the selection, and the choice survives activity recreation | UI dump: `pillIn1Hour selected=true`, the others false; after tapping **In 15 min** only that chip is selected (`screens-it2-u3-editor-default.png`, `screens-it2-u6-in15-selected.png`). `fifteenMinutePresetSchedulesTheMinuteItShowsAndStaysSelected` and `taskDraftSurvivesActivityRecreation` assert the same |
+| U6: preset times kept the current seconds, so the editor showed 11:26 while the reminder was due at 11:26:47 | `ReminderPresets.dueTime` rounds every preset down to a whole minute. It also covers next 8 PM (rolling over to tomorrow) and tomorrow at 9 AM | 5 unit tests in `ReminderPresetsTest`, including the year boundary and New York's daylight-saving change on 2026-11-01. Live: the saved reminder's `timestampMillis` was `1794030960000` = 11:26:00.000 IST, `% 60000 == 0` (`u6-task-prefs.xml`) |
+| U1: Android's *Display over other apps* list did not say which entry to switch on | A line in the overlay card: "On the next screen, tap myfrnd, then switch on “Allow display over other apps”." It is shown **before** the tap. A toast after the tap was tried and removed: that Settings window has the `HIDE_NON_SYSTEM_OVERLAY_WINDOWS` flag, so Android hides every app toast there (`u1-settings-window-flags.txt`; logcat "Toast already killed. pkg=com.myfrnd.app" in `u1-toast-killed-logcat.txt`) | `screens-it2-dashboard-top.png` |
+| U2: the notifications button always said "Manage notifications" | It reads **Allow notifications** while the system prompt can still be shown and **Open notification settings** after a permanent denial | Live on a fresh install: "Allow notifications", the system prompt after tap 1 and tap 2, both denied, then "Open notification settings" with `POST_NOTIFICATIONS: granted=false, flags=[USER_SET|USER_FIXED…]` (`screens-it2-u2-*.png`) |
+| U5: cut-off chip rows looked clipped | The four chip rows on the dashboard and the editor's chip row fade at the edges (`requiresFadingEdge`, 32 dp) | The cut-off **Drop**, **Rise** and **Tomorrow 9 AM** chips fade out (`screens-it2-dashboard-top.png`, `screens-it2-u3-editor-default.png`) |
+| T8: a layout-pass warning and a duplicate constant | The dashboard padding is now read from `@dimen/dashboard_padding`, so the code rounds it the same way as the XML (52 px against 53 px at density 2.625 had made it re-pad during layout). `POSITION_RANDOM`, a second name for the same "random" value, was removed | Three cold starts with a scroll each: **3** `requestLayout() improperly called` lines with the iteration-1 debug APK, **0** with the final iteration-2 APK, and no crash or ANR (`t8-before-logcat.txt`, `t8-after-final-logcat.txt`). On content wider than 760 dp the padding is still adjusted once per width change during layout. That is intentional, to avoid a one-frame jump |
+
+Test-suite changes: `ReminderPresetsTest` is new (5 tests). `CompanionServiceTest.allSimultaneousTasksAreActuallyDisplayedSequentially` now schedules its three simultaneous reminders 5 s ahead instead of 1 s. On a loaded emulator the third add arrived after the shared due time and was rejected ("Choose a future reminder time"), so the test failed before it checked anything. The three reminders still share one due time, so the test still checks sequential delivery.
+
+Build runs, all from the project directory with `--no-daemon --max-workers=2`:
+
+1. `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: successful; 30 unit tests, 0 lint errors, the same 34 warnings.
+2. `connectedDebugAndroidTest` on an emulator started by mistake with software rendering (`-gpu swiftshader_indirect`): 10 of 17 failed. The causes were the environment: a System UI "isn't responding" dialog held focus, and the load delayed the reminder test above. The emulator was restarted on the hardware GPU and its display override (720 x 1600, density 280) was reset. That run's emulator log was overwritten by the restart.
+3. `connectedDebugAndroidTest` on the hardware GPU: **17 of 17 passed**.
+4. A full clean build with the documented command plus `clean` and `:app:assembleDebug`: 1 failure, the reminder-test timing described above.
+5. The same build after the test fix: **BUILD SUCCESSFUL in 7 m 29 s; 30 unit tests and 17 connected tests passed; lint 0 errors, 34 warnings** (the same 18 KTX, 9 dependency and 7 single warnings listed above). The logs are `build-1-unit-lint.log` to `build-6-full-clean.log`; the files named `build-5` and `build-6` hold runs 4 and 5.
+
+A debug APK built incrementally during this pass was 3,928,712 B, but its entries differed from the iteration-1 build by only 3.5 KB. The rest was zip dead space left by incremental repackaging. The clean build gives 3,616,999 B (+1,299 B).
+
 ## Regression coverage
 
 | Original problem or requirement | Evidence in the upgraded app |
@@ -64,9 +90,9 @@ The connected XML suite uses the name `CompanionServiceTest`, but contains all 1
 | Density enlarged bitmap allocations | Native test verifies both images remain 896 x 1200 and each uses at most 4,300,800 bytes |
 | Scroll content overlapped status-bar icons | Inset padding moved to an outer container; visual inspection and the full scroll-dependent UI suite pass |
 | Overlay drew hard-edged black polygons and froze the UI for up to 1.8 s whenever it appeared | Found by live capture of the release build of the project as found: a stray CC0 `.glb` model switched the overlay to the Filament 3D renderer, which does not render correctly on the test emulator. The experimental Filament/GLB path was removed; the canvas character is the only renderer. Controlled A/B below |
-| First tap on "Manage notifications" jumped to system Settings without ever showing the permission prompt | Decision logic extracted to `NotificationPermissionFlow` with 4 unit tests. Verified live: tap 1 shows the system prompt on the fixed build, while the original went straight to Settings |
+| First tap on "Manage notifications" jumped to system Settings without ever showing the permission prompt | Decision logic extracted to `NotificationPermissionFlow` with 4 unit tests. Verified live: tap 1 shows the system prompt on the fixed build, while the original went straight to Settings. Since iteration 2 the button says what it will do: **Allow notifications** or **Open notification settings** |
 | Hero artwork carried leftover opaque white/grey matte (between the legs, between arm and torso, floor glare) that showed as bright patches on dark backgrounds | Matte removed and art re-encoded as WebP; `heroArtworkKeepsItsCollarButHasNoLeftoverBackgroundMatte` asserts those regions are transparent and the real white collar and trousers stay opaque |
-| Quick reminders needed the date and time pickers | **In 15 min** preset; `fifteenMinutePresetSchedulesAboutFifteenMinutesAhead` checks the saved time. On the emulator the editor showed exactly +15:00 and the reminder fired at its stored time (below) |
+| Quick reminders needed the date and time pickers | **In 15 min** preset; `fifteenMinutePresetSchedulesTheMinuteItShowsAndStaysSelected` (renamed and tightened in iteration 2) checks the saved time. On the emulator the editor showed exactly +15:00 and the reminder fired at its stored time (below) |
 | Tapping the persistent notification stacked another copy of the dashboard on top of the open one | First noticed as 5 `MainActivity` records, 417 views and 70,779 KB total PSS (1 activity, 83 views and 41,952 KB before) after a monkey run that another app's ANR then aborted (`device-tests/monkey/activities-after-aborted-run.txt` in the evidence pack). Reproduced on purpose with real notification-shade taps on the release build: **2, 3 and 4 records after taps 1, 2 and 3, and 4 Back presses to leave the app**. The records added by the taps carried `flg=0x10000000` (`FLAG_ACTIVITY_NEW_TASK`, with the app in the foreground) or `flg=0x10400000` (app in the background) and no MAIN/LAUNCHER action, unlike the launcher-started base record; the notification's `PendingIntent` is a bare explicit intent, and `MainActivity` was launch mode `standard`, so each tap added an instance. It is now `singleTask`; the activity never reads its launch intent, so nothing else changes. `tappingTheNotificationReusesTheOpenDashboard` fires the real posted notification's `contentIntent` three times and asserts one activity: it failed before the fix (`expected:<1> but was:<4>`) and passes after. The same shade test on the fixed build gives **1, 1 and 1 records and one Back press** (emulator; `device-tests/notif-stack-before-fix` and `notif-stack-after-fix` in the evidence pack), and again on the release APK built in this directory, signed with a throwaway key (1, 1 and 1 records after the three taps, one Back press, no `MainActivity` record left; `device-tests/notif-stack-realtree`) |
 
 Live reminder checks on the R8 release build (Android 16 emulator, 2026-11-07, device clock):
@@ -218,11 +244,19 @@ The earlier poor software-rendering results are retained above deliberately. Gra
 
 | Local output | Bytes | Signing |
 | --- | ---: | --- |
-| [Debug APK](../app/build/outputs/apk/debug/app-debug.apk) | 3,615,700 | Development/debug signature |
-| [Release APK](../app/build/outputs/apk/release/app-release-unsigned.apk) | 993,466 | Unsigned |
-| [Release AAB](../app/build/outputs/bundle/release/app-release.aab) | 1,446,490 | Unsigned |
+| [Debug APK](../app/build/outputs/apk/debug/app-debug.apk) | 3,616,999 | Development/debug signature |
+| [Release APK](../app/build/outputs/apk/release/app-release-unsigned.apk) | 995,270 | Unsigned |
+| [Release AAB](../app/build/outputs/bundle/release/app-release.aab) | 1,448,383 | Unsigned |
 
-SHA-256 of the artifacts built in this directory (the third full run described above, after the stacking fix):
+SHA-256 of the artifacts from the iteration 2 clean build (run 5 above):
+
+```text
+debug APK    CBB1127F63D94F2CE764833C3944D883608D949FB704804CEB2EC5D8B87EC519
+release APK  C880B72298F8684FED0D5A8AE6CC867DFF1D6F2892EF7EBABE6FE33C28408FEC
+release AAB  281D0B0B2A42B97920F9B9EBAE1D8CB3706DC67FE1D56179AFC40B74281739E3
+```
+
+The rest of this section, and the evidence pack, describe the iteration 1 artifacts: debug 3,615,700 B, release 993,466 B and AAB 1,446,490 B, with these SHA-256 values from the third full run described above, after the stacking fix:
 
 ```text
 debug APK    7655C5E84125305F369235AD9839B65E3DFD25A0207899AA5BEF6E19752C781B
@@ -257,7 +291,7 @@ The artifacts are ignored build outputs, not committed binaries. A clean checkou
 5. **Distribution:** review current Play target-API requirements, the special-use foreground-service declaration and the Data Safety answers; sign, upload, and obtain review with the owner's account. The six store screenshots are now real captures (see `play_store_assets/play_store_metadata.md`); the 512 px store icon and the feature graphic were not changed, and they show different artwork from the launcher icon and the in-app companion. Choose one brand identity before publishing.
 6. **Delivery limitations:** Android can delay or stop background work. Reminders are scheduled inside the foreground service (there is no `AlarmManager` fallback), so a device that kills the service and does not restart it will not deliver them until the app or a reboot restarts it. A plain process kill was recovered by the system on the emulator (see "Process kill while a reminder is pending"); Force Stop, OEM task killers and Doze were not tested. Tasks are one-shot: they are acknowledged on overlay attachment, not user completion, and there is no snooze, completion or repeat. Abrupt process failure is not an exactly-once transaction. Interval countdowns restart in full after process recreation (measured above). This remains a wellness aid, not a medical or emergency alarm.
 7. **Startup tuning:** no app-specific baseline profile was added (the release APK carries only the small AndroidX library profile that the build merges in, `assets/dexopt/baseline.prof`, 1,316 bytes). Forcing full ahead-of-time compilation (the upper bound a profile can reach) gave a 1,643 ms mean cold start (1,251-2,321 ms) against 2,022 ms (1,585-2,312 ms) for the default verify-only install on this emulator, and the ranges overlap. A Macrobenchmark on a physical device is the right way to decide.
-8. **CI:** the workflow builds, unit-tests and lints, but it does not run the emulator tests; run `connectedDebugAndroidTest` before releasing.
+8. **CI:** the workflow builds, unit-tests and lints, but it does not run the emulator tests; run `connectedDebugAndroidTest` before releasing. It has not run on GitHub yet, because the branch has not been pushed.
 9. **Idle animation policy:** the dashboard companion redraws about 52-59 times a second at about 70-76% of one emulator core while it is on screen with animations allowed (table above). It stops in the background and with Reduce motion or the system's animation setting. Decide the default (for example reduced motion, or pausing the hero after a few idle seconds) and measure battery on a physical device before changing it.
 
 The local implementation and verification are complete within this scope. The gates above require hardware, assets, credentials, or account-level actions not supplied with the repository.

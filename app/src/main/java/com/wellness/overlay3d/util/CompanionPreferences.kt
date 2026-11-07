@@ -17,7 +17,6 @@ object CompanionPreferences {
     private const val KEY_REDUCED_MOTION = "key_reduced_motion"
     private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "key_notification_permission_requested"
 
-    const val POSITION_RANDOM = "random"
     const val POSITION_AUTO = "random"
     const val POSITION_THREAD_DROP = "thread_drop"
     const val POSITION_LEFT_RIGHT = "left_right"
@@ -56,7 +55,7 @@ object CompanionPreferences {
     }
 
     fun getPositionMode(context: Context): String {
-        return getPrefs(context).getString(KEY_POSITION_MODE, POSITION_RANDOM) ?: POSITION_RANDOM
+        return getPrefs(context).getString(KEY_POSITION_MODE, POSITION_AUTO) ?: POSITION_AUTO
     }
 
     fun setPositionMode(context: Context, mode: String) {

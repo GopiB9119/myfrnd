@@ -117,15 +117,21 @@ class DashboardTest {
         assertTrue(TaskManager.getPendingReminders(context).isEmpty())
     }
 
-    @Test fun fifteenMinutePresetSchedulesAboutFifteenMinutesAhead() {
+    @Test fun fifteenMinutePresetSchedulesTheMinuteItShowsAndStaysSelected() {
         onView(withId(R.id.btnAddNewTask)).perform(scrollTo(), click())
+        onView(withId(R.id.pillIn1Hour)).check(matches(isSelected()))
         onView(withId(R.id.etTaskTitle)).perform(replaceText("Stand up and stretch"), closeSoftKeyboard())
         val before = System.currentTimeMillis()
         onView(withId(R.id.pillIn15Min)).perform(scrollTo(), click())
-        onView(withText(R.string.save)).perform(click())
         val after = System.currentTimeMillis()
+        onView(withId(R.id.pillIn15Min)).check(matches(isSelected()))
+        listOf(R.id.pillIn1Hour, R.id.pillTodayEvening, R.id.pillTomorrowMorning).forEach {
+            onView(withId(it)).check(matches(isNotSelected()))
+        }
+        onView(withText(R.string.save)).perform(click())
         val scheduled = TaskManager.getPendingReminders(context).single().timestampMillis
-        assertTrue(scheduled in (before + 900_000L)..(after + 900_000L))
+        assertEquals("due time must be a whole minute, like its label", 0L, scheduled % 60_000L)
+        assertTrue(scheduled in (before + 840_000L)..(after + 900_000L))
     }
 
     @Test fun taskDraftSurvivesActivityRecreation() {
@@ -137,6 +143,8 @@ class DashboardTest {
         scenario.recreate()
         onView(withId(R.id.etTaskTitle)).check(matches(withText("Keep my draft")))
         onView(withId(R.id.tvSelectedDateTime)).check(matches(withText(dateText)))
+        onView(withId(R.id.pillTomorrowMorning)).check(matches(isSelected()))
+        onView(withId(R.id.pillIn1Hour)).check(matches(isNotSelected()))
     }
 
     @Test fun corruptDataHasVisibleErrorRatherThanEmptySuccess() {

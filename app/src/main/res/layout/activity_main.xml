@@ -14,7 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="@dimen/dashboard_padding">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="center_vertical">
@@ -43,7 +43,8 @@
                 android:text="@string/demo_message" android:gravity="center"
                 android:textColor="@color/text_primary" android:accessibilityLiveRegion="polite" />
             <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="12dp" android:scrollbars="none">
+                android:layout_marginTop="12dp" android:scrollbars="none"
+                android:requiresFadingEdge="horizontal" android:fadingEdgeLength="@dimen/chip_row_fade">
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
                     <Button android:id="@+id/btnPoseHappy" style="@style/Choice" android:text="@string/pose_cheer" />
                     <Button android:id="@+id/btnPoseWater" style="@style/Choice" android:text="@string/pose_water" />
@@ -59,6 +60,7 @@
         <LinearLayout android:id="@+id/llMandatoryOverlayBanner" style="@style/Card">
             <TextView style="@style/SectionTitle" android:text="@string/permission_title" />
             <TextView style="@style/BodyText" android:text="@string/permission_description" />
+            <TextView style="@style/BodyText" android:text="@string/overlay_settings_hint" />
             <Button android:id="@+id/btnMandatoryGrant" style="@style/PrimaryButton"
                 android:text="@string/grant_overlay" />
         </LinearLayout>
@@ -100,7 +102,8 @@
             <TextView style="@style/BodyText" android:text="@string/eye_interval"
                 android:layout_marginTop="20dp" />
             <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:scrollbars="none">
+                android:layout_marginTop="8dp" android:scrollbars="none"
+                android:requiresFadingEdge="horizontal" android:fadingEdgeLength="@dimen/chip_row_fade">
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
                     <Button android:id="@+id/chipEye15" style="@style/Choice" android:text="@string/minutes_15" />
                     <Button android:id="@+id/chipEye20" style="@style/Choice" android:text="@string/minutes_20" />
@@ -111,7 +114,8 @@
             <TextView style="@style/BodyText" android:text="@string/water_interval"
                 android:layout_marginTop="16dp" />
             <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:scrollbars="none">
+                android:layout_marginTop="8dp" android:scrollbars="none"
+                android:requiresFadingEdge="horizontal" android:fadingEdgeLength="@dimen/chip_row_fade">
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
                     <Button android:id="@+id/chipWater15" style="@style/Choice" android:text="@string/minutes_15" />
                     <Button android:id="@+id/chipWater30" style="@style/Choice" android:text="@string/minutes_30" />
@@ -138,7 +142,8 @@
             <TextView style="@style/SectionTitle" android:text="@string/appearance_title" />
             <TextView style="@style/BodyText" android:text="@string/entrance_label" />
             <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:scrollbars="none">
+                android:layout_marginTop="8dp" android:scrollbars="none"
+                android:requiresFadingEdge="horizontal" android:fadingEdgeLength="@dimen/chip_row_fade">
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
                     <Button android:id="@+id/chipPosAuto" style="@style/Choice" android:text="@string/entrance_auto" />
                     <Button android:id="@+id/chipPosThread" style="@style/Choice" android:text="@string/entrance_drop" />
@@ -161,7 +166,7 @@
             <TextView style="@style/SectionTitle" android:text="@string/notifications_title" />
             <TextView style="@style/BodyText" android:text="@string/notifications_description" />
             <Button android:id="@+id/btnNotifications" style="@style/PrimaryButton"
-                android:text="@string/grant_notifications" />
+                android:text="@string/allow_notifications" />
         </LinearLayout>
         <TextView style="@style/BodyText" android:text="@string/privacy_footer"
             android:layout_marginTop="24dp" android:gravity="center" android:textSize="12sp" />

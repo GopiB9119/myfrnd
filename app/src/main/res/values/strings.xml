@@ -20,10 +20,12 @@
     <string name="permission_title">Meet your companion anywhere</string>
     <string name="permission_description">Allow display over other apps to see small reminders while you use your phone. You can pause them anytime.</string>
     <string name="grant_overlay">Allow display over apps</string>
+    <string name="overlay_settings_hint">On the next screen, tap myfrnd, then switch on \u201cAllow display over other apps\u201d.</string>
     <string name="permission_unavailable">This device could not open overlay settings.</string>
     <string name="notifications_title">Keep controls within reach</string>
     <string name="notifications_description">Allow notifications for the companion status and a quick Pause button. Reminders can still run without notification permission.</string>
-    <string name="grant_notifications">Manage notifications</string>
+    <string name="allow_notifications">Allow notifications</string>
+    <string name="open_notification_settings">Open notification settings</string>
     <string name="rhythm_title">Your daily rhythm</string>
     <string name="rhythm_description">Small pauses, on your schedule. Timers keep their place when you return here.</string>
     <string name="water_title">Water break</string>

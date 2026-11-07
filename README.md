@@ -13,7 +13,8 @@ A native Android companion for gentle eye breaks, hydration nudges, and personal
 - Compatible API 36 build tooling, private service entry points, environment-only release signing, automated tests, and CI.
 - Release builds use R8 code and resource shrinking. The experimental Filament/GLB overlay was removed: on the test emulator it drew hard-edged black polygons and froze the UI for roughly a second each time it appeared. Release APK 26.3 MB to 1.0 MB, installed footprint 32.2 MB to 1.8 MB.
 - Hero artwork is WebP (2.2 MB to 0.2 MB) with its leftover background matte removed.
-- "Manage notifications" asks for notification permission on the first tap instead of jumping straight to Settings, and reminders have an **In 15 min** preset.
+- The notifications button asks for permission on the first tap instead of jumping straight to Settings, and its label says what it will do (**Allow notifications** or **Open notification settings**).
+- Reminder time chips: **In 15 min**, **In 1 hour** (selected by default), **Next 8 PM** and **Tomorrow 9 AM**. The selected chip is highlighted and announced, and the times are whole minutes, so the saved time matches the time shown. Chip rows that run off screen fade at the edge, and the overlay card says which switch to turn on in Settings.
 
 This is a deterministic wellness utility, not an AGI or medical device. No unmeasured "100x faster" claim is made.
 
@@ -50,7 +51,7 @@ Alternatively, open this folder in Android Studio and run the `app` configuratio
 
 ## Verification
 
-See the [verification report](docs/VERIFICATION.md) for **42 passing tests** (25 unit, 17 device), packaging checks, measured release-to-release comparisons (cold start, installed size, overlay memory and stalls) with the method used, the APK checksum, and explicit release limitations. Emulator frame timing was too noisy to support any scroll-smoothness claim, and none is made.
+See the [verification report](docs/VERIFICATION.md) for **47 passing tests** (30 unit, 17 device), packaging checks, measured release-to-release comparisons (cold start, installed size, overlay memory and stalls) with the method used, the APK checksum, and explicit release limitations. Emulator frame timing was too noisy to support any scroll-smoothness claim, and none is made.
 
 ```powershell
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
@@ -72,7 +73,7 @@ The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned,
 - Increment `versionCode`/`versionName` for an actual store release; this working copy preserves the existing release identity.
 - Validate on physical low-end devices, API 26, OEM battery-management variants, TalkBack, large text, landscape, and an installed offline TTS voice.
 - The overlay uses the bundled canvas character only; there is no 3D/GLB renderer. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
-- The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval, deployment, or GitHub push has been performed.
+- The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval or deployment has been performed. The work is on the branch `upgrade/production-hardening-20261107` and has not been merged into `main`.
 
 ## Research and implementation plan
 

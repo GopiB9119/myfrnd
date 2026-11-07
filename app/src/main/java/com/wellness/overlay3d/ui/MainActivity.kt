@@ -77,8 +77,9 @@ class MainActivity : AppCompatActivity() {
             insets
         }
         val maxWidth = (720 * resources.displayMetrics.density).toInt()
+        // Same rounding as the layout's @dimen padding, so phones never re-pad during layout.
+        val padding = resources.getDimensionPixelSize(R.dimen.dashboard_padding)
         binding.root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-            val padding = (20 * resources.displayMetrics.density).toInt()
             val side = maxOf(padding, (view.width - maxWidth) / 2)
             if (binding.dashboardContent.paddingLeft != side) {
                 binding.dashboardContent.setPadding(side, padding, side, padding)
@@ -262,6 +263,9 @@ class MainActivity : AppCompatActivity() {
     private fun refreshPermissions() {
         binding.llMandatoryOverlayBanner.isVisible = !Settings.canDrawOverlays(this)
         binding.notificationBanner.isVisible = !NotificationManagerCompat.from(this).areNotificationsEnabled()
+        val asksSystem = Build.VERSION.SDK_INT >= 33 &&
+            notificationAction() == NotificationPermissionFlow.Action.SHOW_SYSTEM_PROMPT
+        binding.btnNotifications.setText(if (asksSystem) R.string.allow_notifications else R.string.open_notification_settings)
     }
 
     private fun renderStatus(status: CompanionStatus) = with(binding) {
