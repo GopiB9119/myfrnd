@@ -77,7 +77,7 @@
 
 <div class="container">
     <h1>Privacy Policy</h1>
-    <p><strong>Effective Date:</strong> November 5, 2026</p>
+    <p><strong>Effective Date:</strong> November 6, 2026</p>
     <p><strong>Application Name:</strong> myfrnd (also listed as <em>myfrnd: Daily Companion &amp; Habits</em>)</p>
     <p><strong>Package Name / Application ID:</strong> <span class="badge">com.myfrnd.app</span></p>
     <p><strong>Developer / Organization:</strong> vamsib-298</p>
@@ -98,19 +98,20 @@
     <p>To provide an on-screen companion experience, the app requests the following system permissions:</p>
     <ul>
         <li><strong>Display Over Other Apps (<span class="badge">SYSTEM_ALERT_WINDOW</span>):</strong> Allows your companion character to appear gracefully over active apps to prompt screen-rest breaks and hydration reminders.</li>
-        <li><strong>Foreground Service (<span class="badge">FOREGROUND_SERVICE_SPECIAL_USE</span>):</strong> Required to keep timers active in the background, calculate continuous screen-on time (to prevent eye strain), and deliver scheduled spoken reminders accurately.</li>
+        <li><strong>Foreground Service (<span class="badge">FOREGROUND_SERVICE_SPECIAL_USE</span>):</strong> Runs only after you enable the companion, tracking unlocked screen time and showing reminders. Pause stops the service. Reminders are deferred while locked and may be delayed by Android; they are not exact alarms or medical advice.</li>
         <li><strong>Post Notifications (<span class="badge">POST_NOTIFICATIONS</span>):</strong> Required by Android 13+ to display the ongoing companion service status notification, giving you full control to pause or stop the service anytime.</li>
-        <li><strong>Run at Startup (<span class="badge">RECEIVE_BOOT_COMPLETED</span>):</strong> Ensures your scheduled habit alarms and timers resume smoothly if your device restarts.</li>
+        <li><strong>Run at Startup (<span class="badge">RECEIVE_BOOT_COMPLETED</span>):</strong> Attempts to resume only when you previously enabled the companion and permission remains granted. Android may restrict background startup; reopen the app if needed.</li>
     </ul>
 
     <h2>3. Third-Party Tracking &amp; Advertising</h2>
+    <p>Optional speech is off by default. When enabled, reminder text is passed to your installed Android speech engine using a voice reported as available offline. No microphone is used. If a matching offline voice is unavailable, the reminder remains text-only. Your selected speech engine is a separate system component governed by its provider.</p>
     <p>The application contains <strong>zero third-party trackers</strong>, advertising SDKs (such as Google AdMob, Meta Audience Network), or analytics frameworks. Distribution is managed through Google Play under <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
 
     <h2>4. Children’s Privacy</h2>
     <p>Our app does not collect personal information from any user, including children under the age of 13. It is safe for all audiences.</p>
 
     <h2>5. Data Retention &amp; Deletion</h2>
-    <p>Because all data is stored locally, you maintain 100% control over your data at all times. For details on deleting your data, please see our <a href="data-deletion.html">Data Deletion Policy</a> or simply clear the app's cache/storage in your device Settings.</p>
+    <p>You can delete reminders individually in the app, or delete all preferences and reminders using Android Settings &gt; Apps &gt; myfrnd &gt; Clear Storage. Clearing only the cache does not delete saved reminders. See our <a href="google_sites_data_deletion.html">Data Deletion Policy</a> for details.</p>
 
     <h2>6. Contact Us</h2>
     <p>If you have any questions or feedback regarding this Privacy Policy, please contact us at:</p>

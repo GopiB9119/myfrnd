@@ -10,8 +10,14 @@ data class TaskReminder(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
     val timestampMillis: Long,
-    var isTriggered: Boolean = false
+    val isTriggered: Boolean = false
 ) {
+    init {
+        require(id.isNotBlank()) { "Reminder ID must not be blank" }
+        require(title.isNotBlank() && title.length <= MAX_TITLE_LENGTH) { "Invalid reminder title" }
+        require(timestampMillis > 0) { "Invalid reminder date" }
+    }
+
     fun toJson(): JSONObject {
         return JSONObject().apply {
             put("id", id)
@@ -22,12 +28,14 @@ data class TaskReminder(
     }
 
     companion object {
+        const val MAX_TITLE_LENGTH = 160
+
         fun fromJson(json: JSONObject): TaskReminder {
             return TaskReminder(
-                id = json.optString("id", UUID.randomUUID().toString()),
-                title = json.optString("title", "Work Reminder"),
-                timestampMillis = json.optLong("timestampMillis", System.currentTimeMillis()),
-                isTriggered = json.optBoolean("isTriggered", false)
+                id = json.getString("id"),
+                title = json.getString("title"),
+                timestampMillis = json.getLong("timestampMillis"),
+                isTriggered = if (json.has("isTriggered")) json.getBoolean("isTriggered") else false
             )
         }
     }

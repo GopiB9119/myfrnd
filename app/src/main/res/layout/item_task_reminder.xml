@@ -1,46 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    android:background="@drawable/bg_chip_unselected"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="12dp">
-
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/tvTaskTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-medium"
-            android:text="Task Title"
-            android:textColor="#1E293B"
-            android:textSize="14sp" />
-
-        <TextView
-            android:id="@+id/tvTaskTime"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:fontFamily="sans-serif"
-            android:text="Today, 8:00 PM"
-            android:textColor="#0284C7"
-            android:textSize="12sp" />
-
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp" android:background="@drawable/bg_pill_inactive"
+    android:orientation="vertical" android:padding="16dp">
+    <TextView android:id="@+id/tvTaskTitle" style="@style/SectionTitle"
+        android:tag="task" android:textSize="16sp" />
+    <TextView android:id="@+id/tvTaskTime" style="@style/BodyText" android:textSize="13sp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:orientation="horizontal">
+        <Button android:id="@+id/btnEditTask" style="@style/Choice" android:text="@string/edit" />
+        <Button android:id="@+id/btnDeleteTask" style="@style/Choice" android:text="@string/delete" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/btnDeleteTask"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:gravity="center"
-        android:text="🗑️"
-        android:textSize="16sp" />
-
 </LinearLayout>

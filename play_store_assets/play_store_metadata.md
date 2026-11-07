@@ -1,6 +1,6 @@
 # Google Play Store Listing & ASO Metadata
 
-All assets and copy are optimized for high organic search conversion, keyword ranking, and 100% Google Play policy compliance.
+Draft listing copy. Review current Google Play policies before publication; compliance and approval are not guaranteed. The six screenshots in this folder are real captures of the release build; the app icon and feature graphic are unchanged and need an owner decision (section 6).
 
 ---
 
@@ -36,24 +36,24 @@ Meet myfrnd — your interactive daily companion designed to help you stay healt
 Staring at screens for long hours causes digital eye strain, dehydration, and fatigue. myfrnd introduces a friendly on-screen character who drops in gently throughout your day to remind you to rest your eyes, drink water, and conquer your to-do list.
 
 ✨ MEET YOUR INTERACTIVE COMPANION
-• Living Physics & Expressive Reactions: Your companion blinks naturally, breathes smoothly, jumps joyfully when tapped, and speaks reminder voice notes aloud.
+• Expressive Reactions: Your companion blinks naturally, breathes smoothly, bounces joyfully when tapped, and can speak reminders aloud when you turn voice on (off by default).
 • Interactive Dashboard Stage: Cycle through cheerful poses, speech quotes, and motivational cheers whenever you need a quick boost.
-• Always by Your Side: Floats gently on screen without blocking your work, reading, or gaming. Tap to dismiss anytime!
+• Always by Your Side: With your permission, a small overlay appears briefly over your other apps and leaves on its own. Tap to dismiss anytime!
 
 👀 SMART SCREEN EYE BREAKS (20-20-20 RULE)
-• Continuous Screen-Time Tracking: Accurately calculates screen-on duration in the background.
-• Relieve Digital Eye Strain: Automatically triggers gentle 20-second optic rest alerts every 15, 20, 30, or 45 minutes.
-• Blinking & Eye Relaxation: Your companion appears with soothing relaxation halos and resting squints to prompt natural blinking and reduce dry eyes.
+• Screen-Aware Timers: Eye-break and water reminders run while your screen is available (on and unlocked).
+• Eye-Break Reminders: A gentle nudge to look at something about 20 feet away for 20 seconds, every 15, 20, 30, or 45 minutes (your choice).
+• Gentle Visuals: Your companion appears with a soft glow and a relaxed, sleepy-eyed look to remind you to rest your eyes.
 
 💧 SMART HYDRATION & WATER REMINDERS
 • Never Forget to Drink Water: Customizable hydration intervals (15m, 30m, 45m, or 60m).
 • Refreshing Visuals: Accompanied by crystalline water bubble particle animations and cheerful hydration coaching.
-• Boost Daily Energy: Regular sips keep your mind sharp, focused, and fatigue-free.
+• Small Habit, Big Difference: A friendly nudge to take a sip of water when you can.
 
 📋 SPOKEN WORK & TASK TO-DOS
-• Spoken Voice Alarms: Enter any work task, study goal, or habit, and your companion will speak it aloud at the exact scheduled time!
-• Quick Presets & Custom Dates: Set reminders for "In 1 Hour", "Tonight at 8 PM", "Tomorrow at 9 AM", or pick an exact calendar date and minute.
-• Clean Checklist Management: Simple tap-to-complete or delete task controls right from your dashboard.
+• Optional Spoken Reminders: Add a work task, study goal, or habit. When enabled, speech uses an installed offline voice; reminders also appear as text. Reminders wait until your companion is on and your phone is unlocked, and Android may delay them.
+• Quick Presets & Custom Dates: Set reminders for "In 15 min", "In 1 hour", "Next 8 PM", or "Tomorrow 9 AM", or pick an exact calendar date and minute.
+• Clear Reminder Management: Edit upcoming reminders, keep overdue tasks visible, and confirm before deleting. Multiple due tasks appear one at a time. Displaying a reminder does not mark your real-world task complete.
 
 🔒 100% OFFLINE & PRIVACY-BY-DESIGN
 • No Account Required: No logins, passwords, or cloud databases.
@@ -62,7 +62,7 @@ Staring at screens for long hours causes digital eye strain, dehydration, and fa
 
 🌟 WHO IS MYFRND FOR?
 • Remote workers and desk professionals spending hours on screens.
-• Students studying for exams who need disciplined pomodoro-style eye breaks.
+• Students studying for exams who want regular reminders to rest their eyes.
 • Anyone looking to build healthier daily hydration habits effortlessly.
 
 Download myfrnd today and enjoy a healthier, more balanced screen-time routine with your new favorite daily companion!
@@ -101,14 +101,17 @@ When filling out the **Data safety** section in Google Play Console:
 
 ## 6. Play Store Visual Assets Checklist
 
-All visual assets have been rendered to exact Google Play technical specifications and stored in:
-`c:\Users\vamsi\Downloads\myfrnd\play_store_assets\`
+All files are in this folder (`play_store_assets/`).
 
-| Asset File | Dimensions | Format | Specification Met |
+| Asset File | Dimensions | Format | Status |
 | :--- | :--- | :--- | :--- |
-| `app_icon_512.png` | 512 x 512 px | 32-bit PNG | Square, no alpha, high-res |
-| `feature_graphic_1024x500.png` | 1024 x 500 px | PNG / JPEG | Aspect 2.048, centered focal artwork |
-| `screenshot_1_companion.png` | 1080 x 2400 px | 24-bit PNG | 9:20 ratio, ASO mockup, "Meet Your Companion" |
-| `screenshot_2_eyebreaks.png` | 1080 x 2400 px | 24-bit PNG | 9:20 ratio, ASO mockup, "Smart Eye Breaks" |
-| `screenshot_3_hydration.png` | 1080 x 2400 px | 24-bit PNG | 9:20 ratio, ASO mockup, "Hydration Reminders" |
-| `screenshot_4_tasks.png` | 1080 x 2400 px | 24-bit PNG | 9:20 ratio, ASO mockup, "Voice & Work Reminders" |
+| `app_icon_512.png` | 512 x 512 px | PNG, no alpha | **Owner decision, not changed.** The artwork (a 3D character on a white square with rounded corners drawn into the image) differs from the launcher icon (green droplet with a check) and from the in-app companion. Play applies its own corner mask, so a full-bleed square is the safer upload. |
+| `feature_graphic_1024x500.png` | 1024 x 500 px | PNG | **Owner decision, not changed.** It shows a mascot that does not appear in the app. |
+| `screenshot_1_companion.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: dashboard with the companion hero |
+| `screenshot_2_eyebreaks.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Your daily rhythm" with the live Water and Eyes countdowns |
+| `screenshot_3_hydration.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: a Water break reminder the scheduler showed over the home screen. The launcher's own Google app icons are visible behind it; replace it with a neutral-background capture if you prefer |
+| `screenshot_4_tasks.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Your reminders" with three upcoming reminders |
+| `screenshot_5_editor.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: the reminder editor with the quick-time presets |
+| `screenshot_6_privacy.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Make it yours" and the "No account. No ads." footer |
+
+The six screenshots were captured from the R8-shrunk release build on an Android 16 emulator at 1080 x 2160 (exactly 2:1, the maximum aspect ratio Play accepts), with no text, frame or artwork added. Re-capture them from the release you actually ship. The earlier set were composited mockups (1080 x 2400, with an alpha channel) that showed screens and features the app does not have, and they were replaced.
