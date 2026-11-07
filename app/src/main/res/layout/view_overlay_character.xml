@@ -6,15 +6,7 @@
     android:clipToPadding="false"
     android:background="@android:color/transparent">
 
-    <!-- Translucent SurfaceView for Google Filament SwapChain (.glb assets) -->
-    <SurfaceView
-        android:id="@+id/filamentSurfaceView"
-        android:layout_width="match_parent"
-        android:layout_height="270dp"
-        android:layout_gravity="bottom"
-        android:background="@android:color/transparent" />
-
-    <!-- High-Definition 3D Character View -->
+    <!-- Character -->
     <com.wellness.overlay3d.overlay.DevCompanionCanvasView
         android:id="@+id/devCompanionCanvasView"
         android:layout_width="match_parent"
@@ -37,6 +29,8 @@
         android:paddingTop="10dp"
         android:paddingEnd="16dp"
         android:paddingBottom="10dp"
+        android:focusable="true"
+        android:minHeight="48dp"
         android:visibility="invisible">
 
         <TextView
@@ -46,8 +40,8 @@
             android:fontFamily="sans-serif-medium"
             android:lineSpacingExtra="2dp"
             android:maxWidth="225dp"
-            android:text="Hey, have you drank water yet?"
-            android:textColor="#0F172A"
+            android:text="@string/water_message"
+            android:textColor="@color/text_primary"
             android:textSize="13sp" />
 
     </LinearLayout>

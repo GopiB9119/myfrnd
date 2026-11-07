@@ -13,25 +13,32 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "1.0.2"
-
-        ndk {
-            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
-        }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("${rootProject.projectDir}/myfrnd_production_key.jks")
-            storePassword = "Vamsi@298"
-            keyAlias = "myfrnd"
-            keyPassword = "Vamsi@298"
+    val signingValues = listOf(
+        "MYFRND_KEYSTORE", "MYFRND_STORE_PASSWORD", "MYFRND_KEY_ALIAS", "MYFRND_KEY_PASSWORD"
+    ).associateWith { providers.environmentVariable(it).orNull }
+    require(signingValues.values.all { it.isNullOrBlank() } ||
+        signingValues.values.all { !it.isNullOrBlank() }) {
+        "Release signing requires all four MYFRND signing environment variables."
+    }
+    if (signingValues.values.all { !it.isNullOrBlank() }) {
+        signingConfigs {
+            create("release") {
+                storeFile = rootProject.file(signingValues.getValue("MYFRND_KEYSTORE")!!)
+                storePassword = signingValues["MYFRND_STORE_PASSWORD"]
+                keyAlias = signingValues["MYFRND_KEY_ALIAS"]
+                keyPassword = signingValues["MYFRND_KEY_PASSWORD"]
+            }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -52,8 +59,15 @@ android {
         viewBinding = true
     }
 
-    androidResources {
-        noCompress += listOf("glb", "gltf")
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    packaging {
+        resources {
+            // kotlinx.coroutines debug-agent data; unused at runtime in release builds.
+            excludes += "DebugProbesKt.bin"
+        }
     }
 }
 
@@ -62,11 +76,12 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.lifecycle:lifecycle-service:2.8.2")
-
-    // Google Filament 3D Engine & glTF 2.0 Loader
-    implementation("com.google.android.filament:filament-android:1.53.4")
-    implementation("com.google.android.filament:gltfio-android:1.53.4")
-    implementation("com.google.android.filament:filament-utils-android:1.53.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

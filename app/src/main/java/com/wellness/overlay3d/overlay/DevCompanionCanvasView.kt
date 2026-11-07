@@ -2,11 +2,10 @@ package com.wellness.overlay3d.overlay
 
 import android.content.Context
 import android.graphics.*
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
+import android.animation.ValueAnimator
+import android.os.SystemClock
 import android.util.AttributeSet
-import android.view.MotionEvent
+import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.wellness.overlay3d.R
@@ -93,13 +92,21 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         color = Color.argb(160, 56, 189, 248)
     }
 
-    private val startTimeMs = System.currentTimeMillis()
+    private val startTimeMs = SystemClock.elapsedRealtime()
     private var tapBounceStartTimeMs: Long = 0L
+    private var visibleToUser = false
+    var animationEnabled = true
+        set(value) { field = value; invalidate() }
+    var reducedMotion = false
+        set(value) { field = value; invalidate() }
 
     var animationPhase: String = "walk_in" // "walk_in", "talk", "walk_out"
     var isTalking: Boolean = false
+        set(value) { field = value; invalidate() }
     var currentExpression: Expression = Expression.NORMAL
+        set(value) { field = value; invalidate() }
     var displayMode: DisplayMode = DisplayMode.FULL_BODY
+        set(value) { field = value; invalidate() }
     var walkDirection: Int = 1 // 1 = right-facing, -1 = left-facing
 
     private var fullBodyBitmap: Bitmap? = null
@@ -109,50 +116,72 @@ class DevCompanionCanvasView @JvmOverloads constructor(
     private val warmEyeGlowInner = Color.argb(170, 249, 115, 22) // Radiant amber
     private val warmEyeGlowMid = Color.argb(90, 239, 68, 68)     // Soft heat-wave red
     private val warmEyeGlowOuter = Color.TRANSPARENT
+    private val drawingRect = RectF()
+    private val drawingPath = Path()
+    private val shaderMatrix = Matrix()
+    private val sparkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(0f, 0f, 1f,
+            intArrayOf(Color.rgb(90, 60, 70), Color.argb(128, 100, 70, 80), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+    }
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(0f, 0f, 1f,
+            intArrayOf(warmEyeGlowInner, warmEyeGlowMid, warmEyeGlowOuter),
+            floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+    }
+    private val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(220, 255, 255, 255) }
+    private val beaconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(140, 245, 158, 11)
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f
+    }
+    private val starPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sparkAngles = floatArrayOf(0.6f, 1.4f, 2.3f, 3.7f, 4.8f, 5.7f)
+    private val sparkColors = intArrayOf(
+        Color.rgb(250, 204, 21), Color.rgb(52, 211, 153), Color.rgb(56, 189, 248),
+        Color.rgb(244, 114, 182), Color.rgb(250, 204, 21), Color.rgb(52, 211, 153))
+    private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(16, 185, 129) }
 
     var onCompanionTappedListener: (() -> Unit)? = null
 
     init {
+        isClickable = true
+        isFocusable = true
         loadCharacterBitmaps()
     }
 
     private fun loadCharacterBitmaps() {
-        try {
-            val fullBodyDrawable = ContextCompat.getDrawable(context, R.drawable.img_companion_fullbody)
-            fullBodyBitmap = (fullBodyDrawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
-
-            val portraitDrawable = ContextCompat.getDrawable(context, R.drawable.img_companion_portrait)
-            portraitBitmap = (portraitDrawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
-        } catch (_: Exception) {}
+        val fullBodyDrawable = ContextCompat.getDrawable(context, R.drawable.img_companion_fullbody)
+        fullBodyBitmap = (fullBodyDrawable as android.graphics.drawable.BitmapDrawable).bitmap
+        val portraitDrawable = ContextCompat.getDrawable(context, R.drawable.img_companion_portrait)
+        portraitBitmap = (portraitDrawable as android.graphics.drawable.BitmapDrawable).bitmap
     }
 
     fun triggerTapReaction() {
-        tapBounceStartTimeMs = System.currentTimeMillis()
-        try {
-            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(30L, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(30L)
-            }
-        } catch (_: Exception) {}
-        postInvalidateOnAnimation()
+        tapBounceStartTimeMs = if (reducedMotion) 0L else SystemClock.elapsedRealtime()
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        invalidate()
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            triggerTapReaction()
-            onCompanionTappedListener?.invoke()
-            return true
-        }
-        return super.onTouchEvent(event)
+    override fun performClick(): Boolean {
+        super.performClick()
+        onCompanionTappedListener?.invoke()
+        return true
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        visibleToUser = isVisible
+        if (isVisible) invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val t = (System.currentTimeMillis() - startTimeMs) / 1000f
+        val animate = animationEnabled && !reducedMotion && ValueAnimator.areAnimatorsEnabled()
+        val t = if (animate) (SystemClock.elapsedRealtime() - startTimeMs) / 1000f else 0f
         val w = width.toFloat()
         val h = height.toFloat()
 
@@ -164,8 +193,7 @@ class DevCompanionCanvasView @JvmOverloads constructor(
             DisplayMode.FULL_BODY -> drawFullBodyPhotorealistic(canvas, w, h, t)
         }
 
-        // 60 FPS smooth render loop
-        postInvalidateOnAnimation()
+        if (animate && visibleToUser && isAttachedToWindow) postInvalidateOnAnimation()
     }
 
     /**
@@ -210,7 +238,8 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         val midX = (w / 2f + handX) / 2f + cordWave
         val midY = handY / 2f
 
-        val cordPath = Path().apply {
+        val cordPath = drawingPath.apply {
+            reset()
             moveTo(w / 2f, 0f)
             quadTo(midX, midY, handX, handY)
         }
@@ -218,7 +247,7 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         canvas.drawPath(cordPath, cordPaint)
 
         // Grip sparkle at hand contact
-        val sparkGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val sparkGlow = sparkPaint.apply {
             color = Color.argb((180 + sin(t * 8f) * 60).toInt().coerceIn(120, 255), 255, 255, 255)
         }
         canvas.drawCircle(handX, handY, 4.5f, sparkGlow)
@@ -229,7 +258,7 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         canvas.scale(1.0f + breath * 0.35f, 1.0f + breath, left + targetWidth / 2f, bottom)
 
         // Draw 3D Character
-        val dstRect = RectF(left, top, right, bottom)
+        val dstRect = drawingRect.apply { set(left, top, right, bottom) }
         canvas.drawBitmap(bmp, null, dstRect, paint)
 
         // Draw Lifelike Eyelids & Expressions
@@ -261,15 +290,11 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         val shadowY = h * 0.94f
         val shadowAlpha = if (isWalking) (65 - abs(cos(t * strideRate)) * 18).toInt() else 60
 
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(
-                w / 2f + sway, shadowY, shadowW,
-                intArrayOf(Color.argb(shadowAlpha, 90, 60, 70), Color.argb(shadowAlpha / 2, 100, 70, 80), Color.TRANSPARENT),
-                floatArrayOf(0.0f, 0.55f, 1.0f),
-                Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawOval(RectF(w / 2f + sway - shadowW, shadowY - shadowH, w / 2f + sway + shadowW, shadowY + shadowH), shadowPaint)
+        shaderMatrix.setScale(shadowW, shadowW)
+        shaderMatrix.postTranslate(w / 2f + sway, shadowY)
+        shadowPaint.shader.setLocalMatrix(shaderMatrix)
+        shadowPaint.alpha = shadowAlpha
+        canvas.drawOval(w / 2f + sway - shadowW, shadowY - shadowH, w / 2f + sway + shadowW, shadowY + shadowH, shadowPaint)
 
         // 2. Draw 3D Full-Body Character Person
         canvas.save()
@@ -293,7 +318,7 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         canvas.rotate(microTilt, left + targetWidth / 2f, bottom)
         canvas.scale((1.0f + breath * 0.4f) * tapScaleX, (1.0f + breath) * tapScaleY, left + targetWidth / 2f, bottom)
 
-        val dstRect = RectF(left, top, right, bottom)
+        val dstRect = drawingRect.apply { set(left, top, right, bottom) }
         canvas.drawBitmap(bmp, null, dstRect, paint)
 
         // 3. Draw Lifelike Eyelids, Cheeks, Mouth & Expressions
@@ -334,7 +359,7 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         canvas.rotate(peekTilt, left + targetWidth / 2f, bottom)
         canvas.scale(1.0f + breath * 0.3f, 1.0f + breath, left + targetWidth / 2f, bottom)
 
-        val dstRect = RectF(left, top, right, bottom)
+        val dstRect = drawingRect.apply { set(left, top, right, bottom) }
         canvas.drawBitmap(bmp, null, dstRect, paint)
 
         drawLifelikeEyelids(canvas, left, top, targetWidth, targetHeight, t, isPortrait = true)
@@ -411,17 +436,17 @@ class DevCompanionCanvasView @JvmOverloads constructor(
 
     private fun drawSingleEyelid(canvas: Canvas, cx: Float, cy: Float, rx: Float, ry: Float, progress: Float) {
         val lidHeight = ry * 2f * progress
-        val rect = RectF(cx - rx, cy - ry, cx + rx, cy - ry + lidHeight)
 
         canvas.save()
         // Clip oval around eye socket
-        val socketPath = Path().apply {
-            addOval(RectF(cx - rx, cy - ry, cx + rx, cy + ry), Path.Direction.CW)
+        val socketPath = drawingPath.apply {
+            reset()
+            addOval(cx - rx, cy - ry, cx + rx, cy + ry, Path.Direction.CW)
         }
         canvas.clipPath(socketPath)
 
         // Skin-tone lid fill
-        canvas.drawOval(rect, eyelidPaint)
+        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy - ry + lidHeight, eyelidPaint)
 
         // Eyelash contour line at bottom of eyelid
         canvas.drawLine(cx - rx * 0.85f, cy - ry + lidHeight, cx + rx * 0.85f, cy - ry + lidHeight, lashPaint)
@@ -481,22 +506,14 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         val leftEyeX = eyeCenterX - eyeRadius * 0.85f
         val rightEyeX = eyeCenterX + eyeRadius * 0.85f
 
-        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(
-                leftEyeX, eyeCenterY, radius,
-                intArrayOf(warmEyeGlowInner, warmEyeGlowMid, warmEyeGlowOuter),
-                floatArrayOf(0f, 0.45f, 1f),
-                Shader.TileMode.CLAMP
-            )
-        }
+        shaderMatrix.setScale(radius, radius)
+        shaderMatrix.postTranslate(leftEyeX, eyeCenterY)
+        glowPaint.shader.setLocalMatrix(shaderMatrix)
         canvas.drawCircle(leftEyeX, eyeCenterY, radius, glowPaint)
 
-        glowPaint.shader = RadialGradient(
-            rightEyeX, eyeCenterY, radius,
-            intArrayOf(warmEyeGlowInner, warmEyeGlowMid, warmEyeGlowOuter),
-            floatArrayOf(0f, 0.45f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        shaderMatrix.setScale(radius, radius)
+        shaderMatrix.postTranslate(rightEyeX, eyeCenterY)
+        glowPaint.shader.setLocalMatrix(shaderMatrix)
         canvas.drawCircle(rightEyeX, eyeCenterY, radius, glowPaint)
     }
 
@@ -512,14 +529,6 @@ class DevCompanionCanvasView @JvmOverloads constructor(
         height: Float,
         t: Float
     ) {
-        val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-        }
-
-        val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(220, 255, 255, 255)
-        }
-
         for (i in 0 until 5) {
             val cycle = (t * 0.65f + i * 0.4f) % 1.0f
             val px = cx + sin(cycle * 4.5f + i * 1.5f) * (width * 0.34f)
@@ -539,19 +548,11 @@ class DevCompanionCanvasView @JvmOverloads constructor(
     }
 
     private fun drawPlayfulCatchlight(canvas: Canvas, x: Float, y: Float, t: Float) {
-        val catchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(220, 255, 255, 255)
-        }
         val r = 4.2f + abs(sin(t * 5f)) * 2f
-        canvas.drawCircle(x, y, r, catchPaint)
+        canvas.drawCircle(x, y, r, highlightPaint)
     }
 
     private fun drawTaskBeacon(canvas: Canvas, x: Float, y: Float, t: Float) {
-        val beaconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(140, 245, 158, 11)
-            style = Paint.Style.STROKE
-            strokeWidth = 2.5f
-        }
         val beaconRadius = 12f + abs(sin(t * 3.2f)) * 8f
         canvas.drawCircle(x, y, beaconRadius, beaconPaint)
     }
@@ -562,40 +563,28 @@ class DevCompanionCanvasView @JvmOverloads constructor(
             val r = 6f + progress * 16f
             val alpha = ((1f - progress) * 160).toInt().coerceIn(0, 255)
             speechWavePaint.color = Color.argb(alpha, 56, 189, 248)
-            canvas.drawArc(RectF(x - r, y - r, x + r, y + r), -45f, 90f, false, speechWavePaint)
+            canvas.drawArc(x - r, y - r, x + r, y + r, -45f, 90f, false, speechWavePaint)
         }
     }
 
     private fun drawTapSparkles(canvas: Canvas, cx: Float, cy: Float) {
         if (tapBounceStartTimeMs <= 0L) return
-        val elapsed = (System.currentTimeMillis() - tapBounceStartTimeMs) / 1000f
+        val elapsed = (SystemClock.elapsedRealtime() - tapBounceStartTimeMs) / 1000f
         if (elapsed > 0.65f) return
         val progress = elapsed / 0.65f
         val alpha = ((1f - progress) * 230).toInt().coerceIn(0, 255)
 
-        val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-        }
-
-        val angles = floatArrayOf(0.6f, 1.4f, 2.3f, 3.7f, 4.8f, 5.7f)
-        val colors = intArrayOf(
-            Color.argb(alpha, 250, 204, 21),  // Warm gold
-            Color.argb(alpha, 52, 211, 153),  // Emerald mint
-            Color.argb(alpha, 56, 189, 248),  // Sky cyan
-            Color.argb(alpha, 244, 114, 182), // Soft pink
-            Color.argb(alpha, 250, 204, 21),  // Warm gold
-            Color.argb(alpha, 52, 211, 153)   // Emerald mint
-        )
-
-        for (i in angles.indices) {
+        for (i in sparkAngles.indices) {
             val dist = 24f + progress * 50f
-            val ang = angles[i] + progress * 0.35f
+            val ang = sparkAngles[i] + progress * 0.35f
             val px = cx + cos(ang) * dist
             val py = cy - sin(ang) * dist * 0.9f
             val r = (4.5f * (1f - progress * 0.5f))
 
-            starPaint.color = colors[i]
-            val path = Path().apply {
+            starPaint.color = sparkColors[i]
+            starPaint.alpha = alpha
+            val path = drawingPath.apply {
+                reset()
                 moveTo(px, py - r * 1.5f)
                 quadTo(px, py, px + r * 1.5f, py)
                 quadTo(px, py, px, py + r * 1.5f)
@@ -607,28 +596,25 @@ class DevCompanionCanvasView @JvmOverloads constructor(
     }
 
     private fun drawRosyCheekBlush(canvas: Canvas, leftX: Float, rightX: Float, cy: Float, radius: Float) {
-        val blushRectL = RectF(leftX - radius, cy - radius * 0.65f, leftX + radius, cy + radius * 0.65f)
-        val blushRectR = RectF(rightX - radius, cy - radius * 0.65f, rightX + radius, cy + radius * 0.65f)
-        canvas.drawOval(blushRectL, blushPaint)
-        canvas.drawOval(blushRectR, blushPaint)
+        canvas.drawOval(leftX - radius, cy - radius * 0.65f, leftX + radius, cy + radius * 0.65f, blushPaint)
+        canvas.drawOval(rightX - radius, cy - radius * 0.65f, rightX + radius, cy + radius * 0.65f, blushPaint)
     }
 
     private fun drawTalkingMouth(canvas: Canvas, cx: Float, cy: Float, rx: Float, t: Float) {
         // Natural phoneme aperture cadence
         val aperture = 0.18f + abs(sin(t * 11.5f)) * 0.55f
         val ry = rx * aperture
-        val mouthRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
-        canvas.drawOval(mouthRect, mouthPaint)
+        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, mouthPaint)
     }
 
     data class TapPhysics(val offsetY: Float, val scaleX: Float, val scaleY: Float)
 
     private fun getTapPhysics(): TapPhysics {
-        if (tapBounceStartTimeMs <= 0L) return TapPhysics(0f, 1f, 1f)
-        val elapsedSec = (System.currentTimeMillis() - tapBounceStartTimeMs) / 1000f
+        if (reducedMotion || tapBounceStartTimeMs <= 0L) return RESTING_TAP
+        val elapsedSec = (SystemClock.elapsedRealtime() - tapBounceStartTimeMs) / 1000f
         if (elapsedSec > 0.52f) {
             tapBounceStartTimeMs = 0L
-            return TapPhysics(0f, 1f, 1f)
+            return RESTING_TAP
         }
 
         // Pixar-style squash & stretch spring leap physics
@@ -658,11 +644,10 @@ class DevCompanionCanvasView @JvmOverloads constructor(
 
     private fun drawFallbackPlaceholder(canvas: Canvas, w: Float, h: Float, t: Float) {
         val bounce = sin(t * 2.5f) * 4f
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#10B981")
-            textAlign = Paint.Align.CENTER
-            textSize = 28f
-        }
-        canvas.drawCircle(w / 2f, h / 2f + bounce, 48f, p)
+        canvas.drawCircle(w / 2f, h / 2f + bounce, 48f, fallbackPaint)
+    }
+
+    private companion object {
+        val RESTING_TAP = TapPhysics(0f, 1f, 1f)
     }
 }

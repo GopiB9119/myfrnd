@@ -1,0 +1,90 @@
+# myfrnd
+
+A native Android companion for gentle eye breaks, hydration nudges, and personal reminders. Kotlin + Android Views; Android 8.0 (API 26) and newer. No account, backend, ads, analytics, microphone, or network permission.
+
+## What changed
+
+- A responsive, system-inset-aware dashboard with light/dark palettes, live countdowns, larger controls, accessible selection states, and a working tappable companion.
+- Explicit opt-in, persistent Pause (including the notification action), contextual permission guidance, and status based on the actual service rather than permissions alone.
+- Deadline-based scheduling instead of an eight-second polling loop. Water and eye intervals use monotonic elapsed time. Returning to the app, changing the entrance, or changing the other interval does not reset them.
+- Due tasks are shown sequentially, not all consumed before displaying the first one. A task is marked delivered only after its window attaches. Overdue tasks stay visible until shown or deleted.
+- Validated future dates, editable reminders, deletion confirmation, rotation-safe drafts, and explicit errors that preserve unreadable saved data.
+- Optional offline speech, off by default; reduced motion; lifecycle-gated canvas rendering; cancellable view animations instead of per-frame window-layout IPC; no forced garbage collection on dismissal.
+- Compatible API 36 build tooling, private service entry points, environment-only release signing, automated tests, and CI.
+- Release builds use R8 code and resource shrinking. The experimental Filament/GLB overlay was removed: on the test emulator it drew hard-edged black polygons and froze the UI for roughly a second each time it appeared. Release APK 26.3 MB to 1.0 MB, installed footprint 32.2 MB to 1.8 MB.
+- Hero artwork is WebP (2.2 MB to 0.2 MB) with its leftover background matte removed.
+- "Manage notifications" asks for notification permission on the first tap instead of jumping straight to Settings, and reminders have an **In 15 min** preset.
+
+This is a deterministic wellness utility, not an AGI or medical device. No unmeasured "100x faster" claim is made.
+
+## Build and run
+
+Use Android Studio Meerkat or newer, JDK 17 (or Android Studio's JDK 21), Android SDK platform 36, and build tools 35.0.0. The wrapper pins Gradle 8.11.1; AGP is 8.10.1.
+
+On Windows PowerShell, from the repository root:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\sdk"
+.\gradlew.bat :app:assembleDebug
+adb install -r .\app\build\outputs\apk\debug\app-debug.apk
+```
+
+Alternatively, open this folder in Android Studio and run the `app` configuration. `local.properties` is machine-specific and ignored.
+
+1. Open myfrnd and allow **Display over other apps**.
+2. Turn on **Enable companion**. Notification permission is optional but makes Pause easy to reach.
+3. Use **Preview on my screen**, choose intervals, and add reminders.
+4. Voice is optional and requires an installed offline voice matching the device language. Text reminders still work without it.
+
+## Timing and privacy contract
+
+- Reminders are intentionally deferred while the screen is off or locked. No wake lock or exact alarm is requested.
+- Locking resets continuous eye-use time, but does not discard pending tasks or the water deadline. Eye reminders repeat at the selected interval while unlocked.
+- Tasks take priority over wellness reminders. Simultaneous tasks display one after another; the display timeout is 7-18 seconds depending on text length, or tap to dismiss.
+- Pause disables all automatic reminders and survives boot. Enabled state and tasks persist locally; interval countdowns restart after process/service recreation.
+- Android/OEM process limits, Doze, force-stop, and foreground-service restrictions can delay delivery. These are **not exact alarms**, and should not be used for medication, emergency, or other time-critical alerts.
+- "Delivered" means the overlay attached, not that the user completed the task. This is not a transactional exactly-once guarantee across abrupt device/process failure.
+- No reminders are spoken on the lock screen. Speech uses an installed voice reported by Android as not requiring a network connection; the chosen system speech engine remains a separate component.
+- Existing preference and task storage keys are preserved. Existing enabled-state choices are respected; new installs start paused. Speech now defaults to off.
+
+## Verification
+
+See the [verification report](docs/VERIFICATION.md) for **42 passing tests** (25 unit, 17 device), packaging checks, measured release-to-release comparisons (cold start, installed size, overlay memory and stalls) with the method used, the APK checksum, and explicit release limitations. Emulator frame timing was too noisy to support any scroll-smoothness claim, and none is made.
+
+```powershell
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+# With a booted emulator or attached test device:
+$env:ANDROID_SERIAL = 'emulator-5580'
+.\gradlew.bat :app:connectedDebugAndroidTest
+# Release packaging (unsigned unless all signing variables below are supplied):
+.\gradlew.bat :app:assembleRelease :app:bundleRelease
+```
+
+Local reports: [unit tests](app/build/reports/tests/testDebugUnitTest/index.html), [device tests](app/build/reports/androidTests/connected/debug/index.html), [lint](app/build/reports/lint-results-debug.html).
+
+The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned, R8-shrunk) release variants, unit-tests, lints, and uploads debug APK/reports. Device tests are run separately on a test emulator; CI does not claim a device run.
+
+## Release checklist
+
+- Set all four environment variables: `MYFRND_KEYSTORE` (absolute path), `MYFRND_STORE_PASSWORD`, `MYFRND_KEY_ALIAS`, `MYFRND_KEY_PASSWORD`. None should be committed.
+- The original revision contained signing passwords. Treat those credentials as exposed; the signing-key owner must rotate/reset them as appropriate for Play App Signing. This upgrade does not replace your signing identity.
+- Increment `versionCode`/`versionName` for an actual store release; this working copy preserves the existing release identity.
+- Validate on physical low-end devices, API 26, OEM battery-management variants, TalkBack, large text, landscape, and an installed offline TTS voice.
+- The overlay uses the bundled canvas character only; there is no 3D/GLB renderer. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
+- The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval, deployment, or GitHub push has been performed.
+
+## Research and implementation plan
+
+1. **Baseline:** inspect UI, timers, storage, lifecycle, build, and permissions; identify reproducible regressions before adding features.
+2. **Reliability:** separate elapsed-time scheduling from calendar tasks; acknowledge one displayed task at a time; make pause and permission behavior consistent.
+3. **Experience:** preserve the native product, add live status, accessible controls, theme-aware resources, editing, privacy controls, and animation lifecycle cleanup.
+4. **Evidence:** run scheduler/storage regressions, Android UI tests, lint, packaging, native-library alignment checks, and visual/device checks; document remaining release gates rather than claiming production readiness.
+
+Primary sources:
+
+- [AGP 8.10 compatibility: API 36, Gradle 8.11.1, JDK 17](https://developer.android.com/build/releases/agp-8-10-0-release-notes)
+- [Android edge-to-edge and system insets](https://developer.android.com/develop/ui/views/layout/edge-to-edge)
+- [Foreground service background-start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+- [Android accessibility: contrast and 48 dp touch targets](https://developer.android.com/guide/topics/ui/accessibility/apps)
+- [Support 16 KB page sizes](https://developer.android.com/guide/practices/page-sizes)

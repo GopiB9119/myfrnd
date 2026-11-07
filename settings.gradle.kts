@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AndroidFilament3DOverlay"
+rootProject.name = "myfrnd"
 include(":app")

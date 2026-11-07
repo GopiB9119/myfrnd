@@ -1,0 +1,145 @@
+package com.wellness.overlay3d.ui
+
+import android.app.DatePickerDialog
+import android.app.Dialog
+import android.app.TimePickerDialog
+import android.os.Bundle
+import android.text.format.DateFormat
+import android.util.Log
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.DialogFragment
+import com.wellness.overlay3d.R
+import com.wellness.overlay3d.databinding.DialogAddTaskBinding
+import com.wellness.overlay3d.model.TaskReminder
+import com.wellness.overlay3d.util.TaskManager
+import com.wellness.overlay3d.util.TaskStorageException
+import java.util.Calendar
+import java.util.Date
+
+class TaskEditorDialog : DialogFragment() {
+    private var binding: DialogAddTaskBinding? = null
+    private var timestamp = 0L
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val context = requireContext()
+        val editor = DialogAddTaskBinding.inflate(layoutInflater)
+        binding = editor
+        val id = arguments?.getString("id")
+        timestamp = savedInstanceState?.getLong("time") ?: arguments?.getLong("time")
+            ?: (System.currentTimeMillis() + 3_600_000L)
+        editor.etTaskTitle.setText(savedInstanceState?.getString("title") ?: arguments?.getString("title").orEmpty())
+        updateDateLabel()
+        editor.pillIn15Min.setOnClickListener {
+            timestamp = System.currentTimeMillis() + 900_000L
+            updateDateLabel()
+        }
+        editor.pillIn1Hour.setOnClickListener {
+            timestamp = System.currentTimeMillis() + 3_600_000L
+            updateDateLabel()
+        }
+        editor.pillTodayEvening.setOnClickListener {
+            timestamp = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 20)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+            }.timeInMillis
+            updateDateLabel()
+        }
+        editor.pillTomorrowMorning.setOnClickListener {
+            timestamp = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 9)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            updateDateLabel()
+        }
+        editor.btnPickCustomDateTime.setOnClickListener {
+            val selected = Calendar.getInstance().apply { timeInMillis = timestamp }
+            DatePickerDialog(context, { _, year, month, day ->
+                TimePickerDialog(context, { _, hour, minute ->
+                    timestamp = Calendar.getInstance().apply {
+                        set(year, month, day, hour, minute, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                    updateDateLabel()
+                }, selected.get(Calendar.HOUR_OF_DAY), selected.get(Calendar.MINUTE),
+                    DateFormat.is24HourFormat(context)).show()
+            }, selected.get(Calendar.YEAR), selected.get(Calendar.MONTH), selected.get(Calendar.DAY_OF_MONTH))
+                .apply { datePicker.minDate = System.currentTimeMillis() }.show()
+        }
+        val dialog = AlertDialog.Builder(context)
+            .setTitle(if (id == null) R.string.add_task_title else R.string.edit_task_title)
+            .setView(editor.root)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val title = editor.etTaskTitle.text.toString().trim()
+                if (title.isBlank()) {
+                    editor.etTaskTitle.error = getString(R.string.empty_title_error)
+                    editor.etTaskTitle.requestFocus()
+                    return@setOnClickListener
+                }
+                if (timestamp <= System.currentTimeMillis()) {
+                    editor.tvSelectedDateTime.error = getString(R.string.past_time_error)
+                    editor.tvSelectedDateTime.text = getString(R.string.past_time_error)
+                    return@setOnClickListener
+                }
+                try {
+                    if (id == null) {
+                        TaskManager.addReminder(context, TaskReminder(title = title, timestampMillis = timestamp))
+                    } else if (!TaskManager.updateReminder(context, TaskReminder(id, title, timestamp))) {
+                        editor.tvSelectedDateTime.text = getString(R.string.task_no_longer_pending)
+                        return@setOnClickListener
+                    }
+                    Toast.makeText(context, R.string.reminder_saved, Toast.LENGTH_SHORT).show()
+                    dismiss()
+                } catch (error: TaskStorageException) {
+                    Log.e("TaskEditorDialog", "Could not save reminder", error)
+                    editor.tvSelectedDateTime.text = getString(R.string.task_storage_error)
+                } catch (error: IllegalArgumentException) {
+                    Log.w("TaskEditorDialog", "Reminder no longer passes validation", error)
+                    editor.tvSelectedDateTime.text = getString(R.string.past_time_error)
+                }
+            }
+        }
+        return dialog
+    }
+
+    private fun updateDateLabel() {
+        val context = requireContext()
+        val date = Date(timestamp)
+        val formatted = "${DateFormat.getMediumDateFormat(context).format(date)}, ${DateFormat.getTimeFormat(context).format(date)}"
+        binding?.tvSelectedDateTime?.apply {
+            error = null
+            text = getString(R.string.scheduled_for, formatted)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong("time", timestamp)
+        outState.putString("title", binding?.etTaskTitle?.text?.toString())
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroyView() {
+        binding = null
+        super.onDestroyView()
+    }
+
+    companion object {
+        fun create(task: TaskReminder? = null) = TaskEditorDialog().apply {
+            if (task != null) arguments = Bundle().apply {
+                putString("id", task.id)
+                putString("title", task.title)
+                putLong("time", task.timestampMillis)
+            }
+        }
+    }
+}

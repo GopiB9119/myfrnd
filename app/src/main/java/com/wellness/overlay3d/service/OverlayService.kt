@@ -1,5 +1,6 @@
 package com.wellness.overlay3d.service
 
+import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -21,328 +23,227 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.wellness.overlay3d.R
-import com.wellness.overlay3d.model.TaskReminder
+import com.wellness.overlay3d.model.ReminderSchedule
 import com.wellness.overlay3d.overlay.OverlayWindowManager
+import com.wellness.overlay3d.ui.MainActivity
 import com.wellness.overlay3d.util.CompanionPreferences
 import com.wellness.overlay3d.util.TaskManager
+import com.wellness.overlay3d.util.TaskStorageException
 
-/**
- * OverlayService: Background Foreground Engine for "myfrnd".
- *
- * Responsibilities:
- * 1. Persistent Foreground Service adhering to Android 14 (API 34) SPECIAL_USE policies.
- * 2. Precision screen-on duration tracking using SystemClock.elapsedRealtime().
- *    Fires an eye-strain warning when the display remains active continuously for the user-selected duration (default 15m).
- * 3. Schedules periodic water reminders.
- * 4. Checks and triggers user-scheduled work and task reminders.
- * 5. Supports dynamic testing triggers (Thread Drop, Walk, Corner Peek).
- */
 class OverlayService : Service() {
-
     companion object {
         private const val TAG = "OverlayService"
         const val NOTIFICATION_CHANNEL_ID = "myfrnd_service_channel"
         const val NOTIFICATION_ID = 1001
-
-        const val ACTION_TRIGGER_WATER = "com.myfrnd.app.ACTION_TRIGGER_WATER"
-        const val ACTION_TRIGGER_EYE_STRAIN = "com.myfrnd.app.ACTION_TRIGGER_EYE_STRAIN"
         const val ACTION_DEMO_NOW = "com.myfrnd.app.ACTION_DEMO_NOW"
-        const val ACTION_TRIGGER_THREAD = "com.myfrnd.app.ACTION_TRIGGER_THREAD"
-        const val ACTION_TRIGGER_WALK = "com.myfrnd.app.ACTION_TRIGGER_WALK"
-        const val ACTION_TRIGGER_PEEK = "com.myfrnd.app.ACTION_TRIGGER_PEEK"
         const val ACTION_STOP_SERVICE = "com.myfrnd.app.ACTION_STOP_SERVICE"
         const val ACTION_UPDATE_CONFIG = "com.myfrnd.app.ACTION_UPDATE_CONFIG"
+        const val ACTION_TRIGGER_WATER = "com.myfrnd.app.ACTION_TRIGGER_WATER"
+        const val ACTION_TRIGGER_EYE_STRAIN = "com.myfrnd.app.ACTION_TRIGGER_EYE_STRAIN"
 
-        private const val TICK_INTERVAL_MS: Long = 8_000L
+        fun startWithInitialDemo(context: Context) = start(context, ACTION_DEMO_NOW)
+        fun updateConfiguration(context: Context) = start(context, ACTION_UPDATE_CONFIG)
 
-        fun startWithInitialDemo(context: Context) {
-            triggerAction(context, ACTION_DEMO_NOW)
+        fun pause(context: Context) {
+            CompanionPreferences.setCompanionEnabled(context, false)
+            context.stopService(Intent(context, OverlayService::class.java))
+            CompanionRuntime.publish(CompanionStatus())
         }
 
-        fun triggerThreadDrop(context: Context) {
-            triggerAction(context, ACTION_TRIGGER_THREAD)
-        }
-
-        fun triggerWalk(context: Context) {
-            triggerAction(context, ACTION_TRIGGER_WALK)
-        }
-
-        fun triggerCornerPeek(context: Context) {
-            triggerAction(context, ACTION_TRIGGER_PEEK)
-        }
-
-        fun triggerWaterTest(context: Context) {
-            triggerAction(context, ACTION_TRIGGER_WATER)
-        }
-
-        fun triggerEyeTest(context: Context) {
-            triggerAction(context, ACTION_TRIGGER_EYE_STRAIN)
-        }
-
-        fun updateConfiguration(context: Context) {
-            triggerAction(context, ACTION_UPDATE_CONFIG)
-        }
-
-        private fun triggerAction(context: Context, actionStr: String) {
-            val intent = Intent(context, OverlayService::class.java).apply {
-                action = actionStr
+        private fun start(context: Context, action: String): Boolean {
+            if (!CompanionPreferences.isCompanionEnabled(context) || !Settings.canDrawOverlays(context)) {
+                CompanionRuntime.publish(CompanionStatus(error = R.string.setup_required))
+                return false
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            return try {
+                ContextCompat.startForegroundService(context, Intent(context, OverlayService::class.java).setAction(action))
+                true
+            } catch (error: IllegalStateException) {
+                Log.e(TAG, "Android rejected foreground service startup", error)
+                CompanionRuntime.publish(CompanionStatus(error = R.string.service_start_error))
+                false
+            } catch (error: SecurityException) {
+                Log.e(TAG, "Foreground service permission denied", error)
+                CompanionRuntime.publish(CompanionStatus(error = R.string.service_start_error))
+                false
             }
         }
     }
 
-    private lateinit var overlayWindowManager: OverlayWindowManager
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private var isScreenOn = true
-    private var screenOnStartTimestamp: Long = SystemClock.elapsedRealtime()
-    private var eyeStrainTriggeredForCurrentSession = false
-    private var waterIntervalMs: Long = 30L * 60L * 1000L
-    private var eyeStrainThresholdMs: Long = 15L * 60L * 1000L // 15 minutes default
-    private var nextWaterReminderTimestamp: Long = System.currentTimeMillis() + waterIntervalMs
-
-    private fun reloadPreferences() {
-        val waterMin = CompanionPreferences.getWaterIntervalMinutes(this)
-        val eyeMin = CompanionPreferences.getEyeStrainMinutes(this)
-        waterIntervalMs = waterMin * 60L * 1000L
-        eyeStrainThresholdMs = eyeMin * 60L * 1000L
-        Log.i(TAG, "Config reloaded: Water = $waterMin min, Eye Strain = $eyeMin min")
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var overlays: OverlayWindowManager
+    private lateinit var schedule: ReminderSchedule
+    private var screenActive = false
+    private var destroyed = false
+    private var runtimeError: Int? = null
+    private var previewRequested = false
+    private val evaluate = Runnable { evaluateReminders() }
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        if (!CompanionPreferences.isCompanionEnabled(this)) {
+            stopSelf()
+        } else {
+            schedule.configure(SystemClock.elapsedRealtime(),
+                CompanionPreferences.getWaterIntervalMinutes(this),
+                CompanionPreferences.getEyeStrainMinutes(this))
+            overlays.refreshPreferences()
+            requestEvaluation()
+        }
     }
-
+    private val taskListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> requestEvaluation() }
     private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_ON -> handleScreenOn()
-                Intent.ACTION_SCREEN_OFF -> handleScreenOff()
-            }
-        }
-    }
-
-    private val periodicTrackerRunnable = object : Runnable {
-        override fun run() {
-            evaluateScreenTime()
-            evaluateWaterReminder()
-            evaluateTaskReminders()
-            mainHandler.postDelayed(this, TICK_INTERVAL_MS)
+        override fun onReceive(context: Context, intent: Intent) {
+            screenActive = isScreenAvailable()
+            schedule.screenChanged(SystemClock.elapsedRealtime(), screenActive)
+            if (!screenActive) overlays.destroyOverlayImmediately()
+            requestEvaluation()
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        overlayWindowManager = OverlayWindowManager(this)
-        reloadPreferences()
         startServiceInForeground()
-        registerScreenStateReceiver()
-
-        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
-        isScreenOn = powerManager?.isInteractive ?: true
-        screenOnStartTimestamp = SystemClock.elapsedRealtime()
-        nextWaterReminderTimestamp = System.currentTimeMillis() + waterIntervalMs
-
-        mainHandler.post(periodicTrackerRunnable)
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_UPDATE_CONFIG -> {
-                reloadPreferences()
-                nextWaterReminderTimestamp = System.currentTimeMillis() + waterIntervalMs
-                eyeStrainTriggeredForCurrentSession = false
-            }
-            ACTION_TRIGGER_WATER -> {
-                Log.i(TAG, "Triggering Water Reminder.")
-                triggerWaterReminder()
-            }
-            ACTION_TRIGGER_EYE_STRAIN -> {
-                Log.i(TAG, "Triggering Eye Strain Warning.")
-                triggerEyeStrainWarning()
-            }
-            ACTION_TRIGGER_THREAD -> {
-                Log.i(TAG, "Triggering Thread Drop Demo.")
-                mainHandler.postDelayed({
-                    overlayWindowManager.showOverlay(
-                        OverlayWindowManager.OverlayReason.GENERAL_TEST,
-                        "Whoa! Look who swung down on a thread! Here to keep you company!",
-                        forcedStyle = OverlayWindowManager.EntranceStyle.THREAD_DROP
-                    )
-                }, 200L)
-            }
-            ACTION_TRIGGER_WALK -> {
-                Log.i(TAG, "Triggering Walk Demo.")
-                mainHandler.postDelayed({
-                    overlayWindowManager.showOverlay(
-                        OverlayWindowManager.OverlayReason.GENERAL_TEST,
-                        "Hey friend! Stepping by to check in on you. Keep up the great work!",
-                        forcedStyle = OverlayWindowManager.EntranceStyle.LEFT_TO_RIGHT
-                    )
-                }, 200L)
-            }
-            ACTION_TRIGGER_PEEK -> {
-                Log.i(TAG, "Triggering Corner Peek Demo.")
-                mainHandler.postDelayed({
-                    overlayWindowManager.showOverlay(
-                        OverlayWindowManager.OverlayReason.GENERAL_TEST,
-                        "Psst! Peeking in from the top corner! Don't forget to take breaks!",
-                        forcedStyle = OverlayWindowManager.EntranceStyle.TOP_RIGHT_PEEK
-                    )
-                }, 200L)
-            }
-            ACTION_DEMO_NOW -> {
-                Log.i(TAG, "Scheduling initial verification demo in 1.5 seconds.")
-                mainHandler.postDelayed({ triggerWaterReminder() }, 1500L)
-            }
-            ACTION_STOP_SERVICE -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
-            }
-        }
-        return START_STICKY
-    }
-
-    private fun startServiceInForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "myfrnd Companion Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Monitors eye strain, hydration & scheduled reminders."
-                setShowBadge(false)
-            }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
-        }
-
-        val waterIntent = PendingIntent.getService(
-            this, 101,
-            Intent(this, OverlayService::class.java).apply { action = ACTION_TRIGGER_WATER },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val eyeIntent = PendingIntent.getService(
-            this, 102,
-            Intent(this, OverlayService::class.java).apply { action = ACTION_TRIGGER_EYE_STRAIN },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val stopIntent = PendingIntent.getService(
-            this, 103,
-            Intent(this, OverlayService::class.java).apply { action = ACTION_STOP_SERVICE },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("myfrnd Active")
-            .setContentText("Monitoring eye-strain, hydration & work tasks:")
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(android.R.drawable.ic_menu_view, "💧 Drink", waterIntent)
-            .addAction(android.R.drawable.ic_menu_compass, "👀 Eyes", eyeIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent)
-            .build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-    }
-
-    private fun registerScreenStateReceiver() {
+        screenActive = isScreenAvailable()
+        schedule = ReminderSchedule(SystemClock.elapsedRealtime(),
+            CompanionPreferences.getWaterIntervalMinutes(this),
+            CompanionPreferences.getEyeStrainMinutes(this), screenActive)
+        overlays = OverlayWindowManager(this) { requestEvaluation(500L) }
+        overlays.refreshPreferences()
+        CompanionPreferences.getPrefs(this).registerOnSharedPreferenceChangeListener(preferenceListener)
+        TaskManager.preferences(this).registerOnSharedPreferenceChangeListener(taskListener)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
-    private fun handleScreenOn() {
-        isScreenOn = true
-        screenOnStartTimestamp = SystemClock.elapsedRealtime()
-        eyeStrainTriggeredForCurrentSession = false
-        Log.d(TAG, "Screen ON: Continuous timer started.")
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_SERVICE) {
+            pause(this)
+            return START_NOT_STICKY
+        }
+        if (!CompanionPreferences.isCompanionEnabled(this) || !Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_DEMO_NOW) previewRequested = true
+        if (screenActive && !overlays.isOverlayActive) {
+            when (intent?.action) {
+                ACTION_TRIGGER_WATER -> overlays.showOverlay(OverlayWindowManager.OverlayReason.WATER_REMINDER, getString(R.string.water_message))
+                ACTION_TRIGGER_EYE_STRAIN -> overlays.showOverlay(OverlayWindowManager.OverlayReason.EYE_STRAIN, getString(R.string.eye_message))
+            }
+        }
+        requestEvaluation()
+        return START_STICKY
     }
 
-    private fun handleScreenOff() {
-        isScreenOn = false
-        eyeStrainTriggeredForCurrentSession = false
-        Log.d(TAG, "Screen OFF.")
+    private fun isScreenAvailable(): Boolean =
+        getSystemService(PowerManager::class.java).isInteractive &&
+            !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
+    private fun requestEvaluation(delay: Long = 0L) {
+        if (destroyed) return
+        handler.removeCallbacks(evaluate)
+        handler.postDelayed(evaluate, delay)
     }
 
-    private fun evaluateScreenTime() {
-        if (!isScreenOn) return
-        val continuousActiveDuration = SystemClock.elapsedRealtime() - screenOnStartTimestamp
-        if (continuousActiveDuration >= eyeStrainThresholdMs && !eyeStrainTriggeredForCurrentSession) {
-            eyeStrainTriggeredForCurrentSession = true
-            Log.i(TAG, "Continuous screen time threshold reached (${eyeStrainThresholdMs / 60000}m). Triggering eye strain warning.")
-            triggerEyeStrainWarning()
+    private fun publishStatus() {
+        CompanionRuntime.publish(CompanionStatus(
+            running = true, screenActive = screenActive,
+            nextWater = schedule.nextWater, nextEye = schedule.nextEye, error = runtimeError
+        ))
+    }
+
+    private fun evaluateReminders() {
+        if (!CompanionPreferences.isCompanionEnabled(this) || !Settings.canDrawOverlays(this)) {
+            runtimeError = if (!Settings.canDrawOverlays(this)) R.string.setup_required else null
+            stopSelf()
+            return
+        }
+        publishStatus()
+        if (!screenActive || overlays.isOverlayActive) return
+        val now = SystemClock.elapsedRealtime()
+        val wallTime = System.currentTimeMillis()
+        val pending = try {
+            TaskManager.getPendingReminders(this)
+        } catch (error: TaskStorageException) {
+            Log.e(TAG, "Reminders could not be loaded; saved data was not modified", error)
+            runtimeError = R.string.task_storage_error
+            publishStatus()
+            requestEvaluation(60_000L)
+            return
+        }
+        runtimeError = null
+        val task = pending.firstOrNull()
+        val shown = when {
+            task != null && task.timestampMillis <= wallTime -> {
+                overlays.showOverlay(OverlayWindowManager.OverlayReason.WORK_TASK_REMINDER,
+                    getString(R.string.task_message, task.title), task.title).also { attached ->
+                    if (attached) TaskManager.markDelivered(this, task.id)
+                }
+            }
+            previewRequested -> {
+                overlays.showOverlay(OverlayWindowManager.OverlayReason.GENERAL_TEST,
+                    getString(R.string.demo_message)).also { if (it) previewRequested = false }
+            }
+            now >= schedule.nextWater -> {
+                overlays.showOverlay(OverlayWindowManager.OverlayReason.WATER_REMINDER,
+                    getString(R.string.water_message)).also { if (it) schedule.waterDelivered(now) }
+            }
+            schedule.nextEye?.let { now >= it } == true -> {
+                overlays.showOverlay(OverlayWindowManager.OverlayReason.EYE_STRAIN,
+                    getString(R.string.eye_message)).also { if (it) schedule.eyeDelivered(now) }
+            }
+            else -> false
+        }
+        publishStatus()
+        if (!shown) {
+            // A failed attachment is retried, never acknowledged as delivered.
+            requestEvaluation(schedule.nextDelay(now, task?.timestampMillis?.minus(wallTime)).coerceAtLeast(1_000L))
         }
     }
 
-    private fun evaluateWaterReminder() {
-        val now = System.currentTimeMillis()
-        if (now >= nextWaterReminderTimestamp) {
-            nextWaterReminderTimestamp = now + waterIntervalMs
-            Log.i(TAG, "Water timer elapsed. Triggering water reminder.")
-            triggerWaterReminder()
+    private fun startServiceInForeground() {
+        val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, getString(R.string.notification_channel),
+            NotificationManager.IMPORTANCE_LOW).apply {
+            description = getString(R.string.notification_description)
+            setShowBadge(false)
         }
-    }
-
-    private fun evaluateTaskReminders() {
-        val dueList = TaskManager.checkAndPopDueReminders(this)
-        for (item in dueList) {
-            triggerTaskReminder(item)
-            break
-        }
-    }
-
-    fun triggerEyeStrainWarning() {
-        if (!Settings.canDrawOverlays(this)) return
-        if (!CompanionPreferences.isCompanionEnabled(this)) return
-
-        val min = eyeStrainThresholdMs / 60000
-        overlayWindowManager.showOverlay(
-            OverlayWindowManager.OverlayReason.EYE_STRAIN,
-            "My eyes are burning! You've been scrolling for over $min minutes straight. Please stop and rest your eyes!"
-        )
-    }
-
-    fun triggerWaterReminder() {
-        if (!Settings.canDrawOverlays(this)) return
-        if (!CompanionPreferences.isCompanionEnabled(this)) return
-
-        overlayWindowManager.showOverlay(
-            OverlayWindowManager.OverlayReason.WATER_REMINDER,
-            "Hey, have you drank water yet? Take a sip to stay refreshed!"
-        )
-    }
-
-    fun triggerTaskReminder(task: TaskReminder) {
-        if (!Settings.canDrawOverlays(this)) return
-        if (!CompanionPreferences.isCompanionEnabled(this)) return
-
-        overlayWindowManager.showOverlay(
-            OverlayWindowManager.OverlayReason.WORK_TASK_REMINDER,
-            "Hey! Friendly reminder for your task: ${task.title}!",
-            task.title
-        )
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val open = PendingIntent.getActivity(this, 100, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val stop = PendingIntent.getService(this, 103,
+            Intent(this, OverlayService::class.java).setAction(ACTION_STOP_SERVICE),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_description))
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(0, getString(R.string.pause), stop)
+            .build()
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification,
+            if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        destroyed = true
+        handler.removeCallbacksAndMessages(null)
+        unregisterReceiver(screenReceiver)
+        CompanionPreferences.getPrefs(this).unregisterOnSharedPreferenceChangeListener(preferenceListener)
+        TaskManager.preferences(this).unregisterOnSharedPreferenceChangeListener(taskListener)
+        overlays.destroyOverlayImmediately()
+        overlays.releaseTts()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        CompanionRuntime.publish(CompanionStatus(error = runtimeError))
         super.onDestroy()
-        mainHandler.removeCallbacks(periodicTrackerRunnable)
-        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
-        overlayWindowManager.destroyOverlayImmediately()
-        overlayWindowManager.releaseTts()
     }
 }

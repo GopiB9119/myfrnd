@@ -1,555 +1,242 @@
 package com.wellness.overlay3d.overlay
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
-import android.view.animation.AccelerateDecelerateInterpolator
-import android.view.animation.OvershootInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
 import com.wellness.overlay3d.R
-import com.wellness.overlay3d.filament.FilamentRenderer
 import com.wellness.overlay3d.util.CompanionPreferences
 import java.util.Locale
-import kotlin.random.Random
 
-/**
- * OverlayWindowManager: Coordinates transparent overlay window physics, entrance styles,
- * animations (Thread Drop, Left-Right, Right-Left, Corner Peek), TextToSpeech, and cleanup.
- */
-class OverlayWindowManager(private val context: Context) : TextToSpeech.OnInitListener {
+class OverlayWindowManager(
+    private val context: Context,
+    private val onDismissed: () -> Unit = {}
+) {
+    enum class OverlayReason { WATER_REMINDER, EYE_STRAIN, WORK_TASK_REMINDER, GENERAL_TEST }
+    enum class EntranceStyle { THREAD_DROP, LEFT_TO_RIGHT, RIGHT_TO_LEFT, TOP_RIGHT_PEEK, BOTTOM_SLIDE }
 
-    companion object {
-        private const val TAG = "OverlayWindowManager"
-        private const val SLIDE_ANIMATION_DURATION_MS = 1350L
-        private const val SPEECH_UTTERANCE_ID = "MYFRND_SPEECH_UTTERANCE"
-    }
+    private val windowManager = context.getSystemService(WindowManager::class.java)
+    private val handler = Handler(Looper.getMainLooper())
+    private var root: View? = null
+    private var character: DevCompanionCanvasView? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var closed = false
+    private var dismissing = false
+    private var generation = 0L
+    private val timeout = Runnable { dismiss() }
+    val isOverlayActive: Boolean get() = root != null
 
-    enum class OverlayReason {
-        WATER_REMINDER,
-        EYE_STRAIN,
-        WORK_TASK_REMINDER,
-        GENERAL_TEST
-    }
-
-    enum class EntranceStyle {
-        THREAD_DROP,
-        LEFT_TO_RIGHT,
-        RIGHT_TO_LEFT,
-        TOP_RIGHT_PEEK,
-        BOTTOM_SLIDE
-    }
-
-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private var overlayRootView: View? = null
-    private var surfaceView: SurfaceView? = null
-    private var devCompanionCanvasView: DevCompanionCanvasView? = null
-    private var speechBubbleView: View? = null
-    private var speechTextView: TextView? = null
-
-    private var filamentRenderer: FilamentRenderer? = null
-    private var windowLayoutParams: WindowManager.LayoutParams? = null
-
-    private var isOverlayActive = false
-    private var activeEntranceStyle = EntranceStyle.THREAD_DROP
-    private var textToSpeech: TextToSpeech? = TextToSpeech(context.applicationContext, this)
-    private var isTtsReady = false
-
-    private val density = context.resources.displayMetrics.density
-    private val screenWidthPixels = context.resources.displayMetrics.widthPixels
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            textToSpeech?.let { tts ->
-                val result = tts.setLanguage(Locale.US)
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    tts.language = Locale.getDefault()
-                }
-                tts.setPitch(1.06f)
-                tts.setSpeechRate(0.96f)
-                isTtsReady = true
-                setupUtteranceListener()
-            }
+    fun refreshPreferences() {
+        character?.reducedMotion = CompanionPreferences.isReducedMotion(context)
+        if (!CompanionPreferences.isVoiceEnabled(context)) {
+            tts?.stop()
+            character?.isTalking = false
         } else {
-            Log.w(TAG, "TTS initialization failed with code: $status")
+            prepareVoice()
         }
     }
 
-    private fun setupUtteranceListener() {
-        textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                mainHandler.post { setTalkingState(true) }
+    private fun prepareVoice() {
+        if (tts != null || closed || !CompanionPreferences.isVoiceEnabled(context)) return
+        tts = TextToSpeech(context.applicationContext) { status ->
+            if (closed) return@TextToSpeech
+            if (status != TextToSpeech.SUCCESS) {
+                Log.w(TAG, "Speech unavailable; reminders remain visible")
+                return@TextToSpeech
             }
-
-            override fun onDone(utteranceId: String?) {
-                mainHandler.postDelayed({ slideOutAndDestroy() }, 700L)
+            val language = Locale.getDefault().language
+            val localVoice = tts?.voices?.firstOrNull {
+                !it.isNetworkConnectionRequired && it.locale.language == language
             }
-
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                mainHandler.post { slideOutAndDestroy() }
-            }
-        })
+            ttsReady = localVoice != null && tts?.setVoice(localVoice) == TextToSpeech.SUCCESS
+            if (!ttsReady) Log.w(TAG, "No offline speech voice for the device language")
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    handler.post {
+                        if (utteranceId == generation.toString()) character?.isTalking = true
+                    }
+                }
+                override fun onDone(utteranceId: String?) {
+                    handler.post {
+                        if (utteranceId == generation.toString()) character?.isTalking = false
+                    }
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    Log.w(TAG, "Speech playback failed; keeping the text reminder")
+                    onDone(utteranceId)
+                }
+            })
+        }
     }
 
+    /** A task may only be acknowledged after its overlay was successfully attached. */
     fun showOverlay(
         reason: OverlayReason,
         spokenText: String,
         taskTitle: String? = null,
         forcedStyle: EntranceStyle? = null
-    ) {
-        if (isOverlayActive) return
-        isOverlayActive = true
-
-        val modeSetting = CompanionPreferences.getPositionMode(context)
-        activeEntranceStyle = forcedStyle ?: when (modeSetting) {
+    ): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (closed || isOverlayActive) return false
+        if (!Settings.canDrawOverlays(context)) {
+            Log.w(TAG, "Overlay permission is no longer available")
+            return false
+        }
+        generation++
+        dismissing = false
+        val style = forcedStyle ?: when (CompanionPreferences.getPositionMode(context)) {
             CompanionPreferences.POSITION_THREAD_DROP -> EntranceStyle.THREAD_DROP
             CompanionPreferences.POSITION_LEFT_RIGHT -> EntranceStyle.LEFT_TO_RIGHT
             CompanionPreferences.POSITION_RIGHT_LEFT -> EntranceStyle.RIGHT_TO_LEFT
             CompanionPreferences.POSITION_TOP_RIGHT -> EntranceStyle.TOP_RIGHT_PEEK
             CompanionPreferences.POSITION_BOTTOM -> EntranceStyle.BOTTOM_SLIDE
-            else -> {
-                // RANDOM SURPRISE: Choose delightfully each time!
-                when (Random.nextInt(4)) {
-                    0 -> EntranceStyle.THREAD_DROP
-                    1 -> EntranceStyle.LEFT_TO_RIGHT
-                    2 -> EntranceStyle.RIGHT_TO_LEFT
-                    else -> EntranceStyle.TOP_RIGHT_PEEK
-                }
-            }
+            else -> EntranceStyle.entries.random()
         }
-
-        mainHandler.post {
-            try {
-                inflateAndAttachOverlayView(reason)
-                bindSurfaceAndFilament()
-                slideInCharacter {
-                    speakWarning(reason, spokenText, taskTitle)
-                }
-            } catch (t: Throwable) {
-                Log.e(TAG, "Error displaying overlay: ${t.message}", t)
-                destroyOverlayImmediately()
+        val view = LayoutInflater.from(context).inflate(R.layout.view_overlay_character, null)
+        val companion = view.findViewById<DevCompanionCanvasView>(R.id.devCompanionCanvasView)
+        character = companion
+        companion.apply {
+            reducedMotion = CompanionPreferences.isReducedMotion(context)
+            displayMode = when (style) {
+                EntranceStyle.THREAD_DROP -> DevCompanionCanvasView.DisplayMode.THREAD_DROP
+                EntranceStyle.TOP_RIGHT_PEEK -> DevCompanionCanvasView.DisplayMode.TOP_RIGHT_PEEK
+                else -> DevCompanionCanvasView.DisplayMode.FULL_BODY
             }
+            currentExpression = when (reason) {
+                OverlayReason.WATER_REMINDER -> DevCompanionCanvasView.Expression.HAPPY_WATER
+                OverlayReason.EYE_STRAIN -> DevCompanionCanvasView.Expression.TIRED_EYES
+                OverlayReason.WORK_TASK_REMINDER -> DevCompanionCanvasView.Expression.TASK_REMINDER
+                OverlayReason.GENERAL_TEST -> DevCompanionCanvasView.Expression.WINK_PLAYFUL
+            }
+            contentDescription = context.getString(R.string.dismiss_reminder)
+            setOnClickListener { dismiss() }
         }
-    }
-
-    private fun inflateAndAttachOverlayView(reason: OverlayReason) {
-        val inflater = LayoutInflater.from(context)
-        val root = inflater.inflate(R.layout.view_overlay_character, null)
-        overlayRootView = root
-
-        surfaceView = root.findViewById(R.id.filamentSurfaceView)
-        devCompanionCanvasView = root.findViewById(R.id.devCompanionCanvasView)
-        speechBubbleView = root.findViewById(R.id.speechBubbleContainer)
-        speechTextView = root.findViewById(R.id.speechText)
-
-        speechBubbleView?.visibility = View.INVISIBLE
-
-        // Tap bubble or character to dismiss smoothly
-        speechBubbleView?.setOnClickListener {
-            slideOutAndDestroy()
-        }
-        devCompanionCanvasView?.onCompanionTappedListener = {
-            mainHandler.postDelayed({ slideOutAndDestroy() }, 450L)
-        }
-
-        // Configure expression based on context
-        devCompanionCanvasView?.currentExpression = when (reason) {
-            OverlayReason.EYE_STRAIN -> DevCompanionCanvasView.Expression.TIRED_EYES
-            OverlayReason.WATER_REMINDER -> DevCompanionCanvasView.Expression.HAPPY_WATER
-            OverlayReason.WORK_TASK_REMINDER -> DevCompanionCanvasView.Expression.TASK_REMINDER
-            OverlayReason.GENERAL_TEST -> {
-                if (activeEntranceStyle == EntranceStyle.THREAD_DROP)
-                    DevCompanionCanvasView.Expression.WINK_PLAYFUL
-                else
-                    DevCompanionCanvasView.Expression.NORMAL
-            }
-        }
-
-        val overlayWidthPx: Int
-        val overlayHeightPx: Int
-        val layoutGravity: Int
-        var startX = 0
-        var startY = 0
-
-        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-
-        val windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-
-        when (activeEntranceStyle) {
-            EntranceStyle.THREAD_DROP -> {
-                // Drop from very top suspended on thread
-                devCompanionCanvasView?.displayMode = DevCompanionCanvasView.DisplayMode.THREAD_DROP
-                overlayWidthPx = (270 * density).toInt()
-                overlayHeightPx = (360 * density).toInt()
-                layoutGravity = Gravity.TOP or Gravity.START
-                startX = (screenWidthPixels - overlayWidthPx) / 2
-                startY = -overlayHeightPx - (40 * density).toInt()
-            }
-            EntranceStyle.TOP_RIGHT_PEEK -> {
-                // Peeking in from top-right corner looking at user
-                devCompanionCanvasView?.displayMode = DevCompanionCanvasView.DisplayMode.TOP_RIGHT_PEEK
-                overlayWidthPx = (240 * density).toInt()
-                overlayHeightPx = (270 * density).toInt()
-                layoutGravity = Gravity.TOP or Gravity.END
-                startX = (16 * density).toInt()
-                startY = -overlayHeightPx - (20 * density).toInt()
-            }
-            EntranceStyle.LEFT_TO_RIGHT -> {
-                // Walk in from left edge
-                devCompanionCanvasView?.displayMode = DevCompanionCanvasView.DisplayMode.FULL_BODY
-                devCompanionCanvasView?.walkDirection = 1
-                overlayWidthPx = (260 * density).toInt()
-                overlayHeightPx = (340 * density).toInt()
-                layoutGravity = Gravity.BOTTOM or Gravity.START
-                startX = -overlayWidthPx - 60
-                startY = (36 * density).toInt()
-            }
-            EntranceStyle.RIGHT_TO_LEFT, EntranceStyle.BOTTOM_SLIDE -> {
-                // Walk in from right edge
-                devCompanionCanvasView?.displayMode = DevCompanionCanvasView.DisplayMode.FULL_BODY
-                devCompanionCanvasView?.walkDirection = -1
-                overlayWidthPx = (260 * density).toInt()
-                overlayHeightPx = (340 * density).toInt()
-                layoutGravity = Gravity.BOTTOM or Gravity.START
-                startX = screenWidthPixels + 60
-                startY = (36 * density).toInt()
-            }
-        }
-
-        val layoutParams = WindowManager.LayoutParams(
-            overlayWidthPx,
-            overlayHeightPx,
-            windowType,
-            windowFlags,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = layoutGravity
-            x = startX
-            y = startY
-        }
-
-        surfaceView?.apply {
-            setZOrderOnTop(true)
-            holder.setFormat(PixelFormat.TRANSLUCENT)
-        }
-
-        windowLayoutParams = layoutParams
-        windowManager.addView(root, layoutParams)
-    }
-
-    private fun bindSurfaceAndFilament() {
-        val targetSurface = surfaceView ?: return
-        val hasGlb = FilamentRenderer.hasGlbAsset(context)
-
-        if (!hasGlb) {
-            targetSurface.visibility = View.GONE
-            devCompanionCanvasView?.visibility = View.VISIBLE
-            return
-        }
-
-        targetSurface.visibility = View.VISIBLE
-        devCompanionCanvasView?.visibility = View.GONE
-
-        filamentRenderer = FilamentRenderer(context)
-        targetSurface.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                filamentRenderer?.onSurfaceCreated(holder.surface, targetSurface.width, targetSurface.height)
-                filamentRenderer?.playAnimation("walk_in")
-            }
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
-                filamentRenderer?.onSurfaceChanged(w, h)
-            }
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                filamentRenderer?.onSurfaceDestroyed()
-            }
+        val title = context.getString(when (reason) {
+            OverlayReason.WATER_REMINDER -> R.string.water_title
+            OverlayReason.EYE_STRAIN -> R.string.eye_title
+            OverlayReason.WORK_TASK_REMINDER -> R.string.tasks_title
+            OverlayReason.GENERAL_TEST -> R.string.companion_title
         })
-    }
-
-    private fun slideInCharacter(onComplete: () -> Unit) {
-        val params = windowLayoutParams ?: return
-        val root = overlayRootView ?: return
-
-        setWalkingState(isWalkIn = true)
-
-        when (activeEntranceStyle) {
-            EntranceStyle.THREAD_DROP -> {
-                // Drop down from top with elastic overshoot bounce
-                val overlayHeightPx = (360 * density).toInt()
-                val startY = -overlayHeightPx - (40 * density).toInt()
-                val targetY = (36 * density).toInt()
-
-                val animator = ValueAnimator.ofInt(startY, targetY).apply {
-                    duration = 1300L
-                    interpolator = OvershootInterpolator(1.15f)
-                    addUpdateListener { va ->
-                        params.y = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { onComplete() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.TOP_RIGHT_PEEK -> {
-                val overlayHeightPx = (270 * density).toInt()
-                val startY = -overlayHeightPx - (20 * density).toInt()
-                val targetY = (24 * density).toInt()
-
-                val animator = ValueAnimator.ofInt(startY, targetY).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.y = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { onComplete() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.LEFT_TO_RIGHT -> {
-                val overlayWidthPx = (260 * density).toInt()
-                val startX = -overlayWidthPx - 60
-                val targetX = (screenWidthPixels - overlayWidthPx) / 2
-
-                val animator = ValueAnimator.ofInt(startX, targetX).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.x = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { onComplete() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.RIGHT_TO_LEFT, EntranceStyle.BOTTOM_SLIDE -> {
-                val overlayWidthPx = (260 * density).toInt()
-                val startX = screenWidthPixels + 60
-                val targetX = (screenWidthPixels - overlayWidthPx) / 2
-
-                val animator = ValueAnimator.ofInt(startX, targetX).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.x = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { onComplete() }
-                    })
-                }
-                animator.start()
-            }
+        view.findViewById<TextView>(R.id.speechText).text =
+            context.getString(R.string.overlay_message, title, taskTitle ?: spokenText)
+        view.findViewById<View>(R.id.speechBubbleContainer).apply {
+            visibility = View.VISIBLE
+            contentDescription = context.getString(R.string.overlay_accessibility, title, taskTitle ?: spokenText)
+            setOnClickListener { dismiss() }
         }
-    }
-
-    private fun speakWarning(reason: OverlayReason, spokenText: String, taskTitle: String?) {
-        val bubbleTitle = when (reason) {
-            OverlayReason.WATER_REMINDER -> "💧 Drink Water!"
-            OverlayReason.EYE_STRAIN -> "👀 Warm Eyes Alert!"
-            OverlayReason.WORK_TASK_REMINDER -> "📋 Task Reminder!"
-            OverlayReason.GENERAL_TEST -> "✨ Hey friend!"
-        }
-
-        val displayText = if (taskTitle != null) "$bubbleTitle\n$taskTitle" else "$bubbleTitle\n$spokenText"
-        speechTextView?.text = displayText
-        speechBubbleView?.alpha = 0f
-        speechBubbleView?.visibility = View.VISIBLE
-        speechBubbleView?.animate()?.alpha(1f)?.setDuration(260L)?.start()
-
-        setTalkingState(true)
-
-        if (isTtsReady && textToSpeech != null) {
-            val params = Bundle().apply {
-                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, SPEECH_UTTERANCE_ID)
+        val density = context.resources.displayMetrics.density
+        val screen = context.resources.displayMetrics
+        val width = (280 * density).toInt().coerceAtMost(screen.widthPixels)
+        val height = (360 * density).toInt().coerceAtMost(screen.heightPixels - (48 * density).toInt())
+        val params = WindowManager.LayoutParams(width, height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT).apply {
+            gravity = when (style) {
+                EntranceStyle.THREAD_DROP -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                EntranceStyle.TOP_RIGHT_PEEK -> Gravity.TOP or Gravity.END
+                else -> Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             }
-            textToSpeech?.speak(spokenText, TextToSpeech.QUEUE_FLUSH, params, SPEECH_UTTERANCE_ID)
+            y = (24 * density).toInt()
+        }
+        try {
+            windowManager.addView(view, params)
+        } catch (error: WindowManager.BadTokenException) {
+            return attachmentFailed(error)
+        } catch (error: SecurityException) {
+            return attachmentFailed(error)
+        }
+        root = view
+        prepareVoice()
+        val animate = ValueAnimator.areAnimatorsEnabled() && !companion.reducedMotion
+        if (animate) {
+            view.alpha = 0f
+            when (style) {
+                EntranceStyle.THREAD_DROP, EntranceStyle.TOP_RIGHT_PEEK -> view.translationY = -height * 0.6f
+                EntranceStyle.BOTTOM_SLIDE -> view.translationY = height * 0.6f
+                EntranceStyle.LEFT_TO_RIGHT -> view.translationX = -width.toFloat()
+                EntranceStyle.RIGHT_TO_LEFT -> view.translationX = width.toFloat()
+            }
+            view.animate().alpha(1f).translationX(0f).translationY(0f)
+                .setDuration(650L).setInterpolator(DecelerateInterpolator())
+                .withEndAction { speak(spokenText) }.start()
         } else {
-            mainHandler.postDelayed({ slideOutAndDestroy() }, 3800L)
+            speak(spokenText)
         }
+        // Text remains readable even when TTS is absent, fails, or never calls back.
+        handler.postDelayed(timeout, (spokenText.length * 65L + 3_000L).coerceIn(7_000L, 18_000L))
+        return true
     }
 
-    private fun slideOutAndDestroy() {
-        val params = windowLayoutParams ?: run { destroyOverlayImmediately(); return }
-        val root = overlayRootView ?: run { destroyOverlayImmediately(); return }
+    private fun attachmentFailed(error: RuntimeException): Boolean {
+        Log.e(TAG, "Could not attach reminder window", error)
+        character = null
+        return false
+    }
 
-        speechBubbleView?.animate()?.alpha(0f)?.setDuration(200L)?.start()
-        setWalkingState(isWalkIn = false)
-
-        when (activeEntranceStyle) {
-            EntranceStyle.THREAD_DROP -> {
-                // Zip back up into the ceiling pulling the thread!
-                val currentY = params.y
-                val overlayHeightPx = (360 * density).toInt()
-                val targetExitY = -overlayHeightPx - (50 * density).toInt()
-
-                val animator = ValueAnimator.ofInt(currentY, targetExitY).apply {
-                    duration = 1100L
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.y = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { destroyOverlayImmediately() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.TOP_RIGHT_PEEK -> {
-                val currentY = params.y
-                val overlayHeightPx = (270 * density).toInt()
-                val targetExitY = -overlayHeightPx - (30 * density).toInt()
-
-                val animator = ValueAnimator.ofInt(currentY, targetExitY).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.y = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { destroyOverlayImmediately() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.LEFT_TO_RIGHT -> {
-                // Exits off-screen to the right!
-                val currentX = params.x
-                val targetExitX = screenWidthPixels + 80
-
-                val animator = ValueAnimator.ofInt(currentX, targetExitX).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.x = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { destroyOverlayImmediately() }
-                    })
-                }
-                animator.start()
-            }
-            EntranceStyle.RIGHT_TO_LEFT, EntranceStyle.BOTTOM_SLIDE -> {
-                // Exits off-screen to the left!
-                val currentX = params.x
-                val overlayWidthPx = (260 * density).toInt()
-                val targetExitX = -(overlayWidthPx + 90)
-
-                val animator = ValueAnimator.ofInt(currentX, targetExitX).apply {
-                    duration = SLIDE_ANIMATION_DURATION_MS
-                    interpolator = AccelerateDecelerateInterpolator()
-                    addUpdateListener { va ->
-                        params.x = va.animatedValue as Int
-                        if (root.isAttachedToWindow) {
-                            try { windowManager.updateViewLayout(root, params) } catch (_: Exception) {}
-                        }
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { destroyOverlayImmediately() }
-                    })
-                }
-                animator.start()
+    private fun speak(text: String) {
+        character?.animationPhase = "talk"
+        if (ttsReady && CompanionPreferences.isVoiceEnabled(context)) {
+            if (tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, generation.toString()) == TextToSpeech.ERROR) {
+                Log.w(TAG, "Speech request rejected; keeping the text reminder")
             }
         }
     }
 
-    private fun setWalkingState(isWalkIn: Boolean) {
-        val phase = if (isWalkIn) "walk_in" else "walk_out"
-        filamentRenderer?.playAnimation(phase)
-        devCompanionCanvasView?.apply {
-            animationPhase = phase
-            isTalking = false
-        }
-    }
-
-    private fun setTalkingState(talking: Boolean) {
-        if (talking) {
-            filamentRenderer?.playAnimation("talk")
-            devCompanionCanvasView?.apply {
-                animationPhase = "talk"
-                isTalking = true
-            }
+    private fun dismiss() {
+        val view = root ?: return
+        if (dismissing) return
+        dismissing = true
+        handler.removeCallbacks(timeout)
+        view.animate().cancel()
+        tts?.stop()
+        if (!ValueAnimator.areAnimatorsEnabled() || CompanionPreferences.isReducedMotion(context)) {
+            finishDismissal()
         } else {
-            devCompanionCanvasView?.isTalking = false
+            view.animate().alpha(0f).setDuration(220L).withEndAction { finishDismissal() }.start()
         }
+    }
+
+    private fun finishDismissal() {
+        destroyOverlayImmediately()
+        onDismissed()
     }
 
     fun destroyOverlayImmediately() {
-        mainHandler.post {
-            try {
-                if (overlayRootView?.isAttachedToWindow == true) {
-                    windowManager.removeViewImmediate(overlayRootView)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error removing overlay view: ${e.message}")
-            }
-
-            try { filamentRenderer?.destroy() } catch (_: Throwable) {}
-            filamentRenderer = null
-            overlayRootView = null
-            surfaceView = null
-            devCompanionCanvasView = null
-            speechBubbleView = null
-            speechTextView = null
-            windowLayoutParams = null
-            isOverlayActive = false
-
-            System.gc()
+        generation++
+        handler.removeCallbacksAndMessages(null)
+        tts?.stop()
+        root?.let { view ->
+            view.animate().withEndAction(null).cancel()
+            if (view.isAttachedToWindow) windowManager.removeViewImmediate(view)
         }
+        root = null
+        character = null
+        dismissing = false
     }
 
     fun releaseTts() {
-        try {
-            textToSpeech?.stop()
-            textToSpeech?.shutdown()
-        } catch (_: Exception) {}
-        textToSpeech = null
-        isTtsReady = false
+        closed = true
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        ttsReady = false
+    }
+
+    private companion object {
+        const val TAG = "OverlayWindowManager"
     }
 }
