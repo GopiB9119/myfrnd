@@ -16,20 +16,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val localKeyFile = rootProject.file("myfrnd_production_key.jks")
     val signingValues = listOf(
         "MYFRND_KEYSTORE", "MYFRND_STORE_PASSWORD", "MYFRND_KEY_ALIAS", "MYFRND_KEY_PASSWORD"
     ).associateWith { providers.environmentVariable(it).orNull }
-    require(signingValues.values.all { it.isNullOrBlank() } ||
-        signingValues.values.all { !it.isNullOrBlank() }) {
-        "Release signing requires all four MYFRND signing environment variables."
-    }
-    if (signingValues.values.all { !it.isNullOrBlank() }) {
-        signingConfigs {
-            create("release") {
+
+    signingConfigs {
+        create("release") {
+            if (signingValues.values.all { !it.isNullOrBlank() }) {
                 storeFile = rootProject.file(signingValues.getValue("MYFRND_KEYSTORE")!!)
                 storePassword = signingValues["MYFRND_STORE_PASSWORD"]
                 keyAlias = signingValues["MYFRND_KEY_ALIAS"]
                 keyPassword = signingValues["MYFRND_KEY_PASSWORD"]
+            } else if (localKeyFile.exists()) {
+                storeFile = localKeyFile
+                storePassword = "Vamsi@298"
+                keyAlias = "myfrnd"
+                keyPassword = "Vamsi@298"
             }
         }
     }
