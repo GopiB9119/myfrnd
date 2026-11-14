@@ -107,11 +107,11 @@ All files are in this folder (`play_store_assets/`).
 | :--- | :--- | :--- | :--- |
 | `app_icon_512.png` | 512 x 512 px | PNG, no alpha | **Owner decision, not changed.** The artwork (a 3D character on a white square with rounded corners drawn into the image) differs from the launcher icon (green droplet with a check) and from the in-app companion. Play applies its own corner mask, so a full-bleed square is the safer upload. |
 | `feature_graphic_1024x500.png` | 1024 x 500 px | PNG | **Owner decision, not changed.** It shows a mascot that does not appear in the app. |
-| `screenshot_1_companion.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: dashboard with the companion hero |
+| `screenshot_1_companion.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: dashboard with the 3D companion hero |
 | `screenshot_2_eyebreaks.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Your daily rhythm" with the live Water and Eyes countdowns |
-| `screenshot_3_hydration.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: a Water break reminder the scheduler showed over the home screen. The launcher's own Google app icons are visible behind it; replace it with a neutral-background capture if you prefer |
+| `screenshot_3_hydration.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: the 3D companion dropping onto the home screen on its thread with a reminder bubble ("Preview on my screen"). The launcher's own Google app icons are visible behind it; replace it with a neutral-background capture if you prefer |
 | `screenshot_4_tasks.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Your reminders" with three upcoming reminders |
 | `screenshot_5_editor.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: the reminder editor with the quick-time presets |
-| `screenshot_6_privacy.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Make it yours" and the "No account. No ads." footer |
+| `screenshot_6_privacy.png` | 1080 x 2160 px | 24-bit PNG, no alpha | Real capture: "Make it yours", the "No account. No ads." footer and the 3D model credit (CC BY 4.0) |
 
 The six screenshots were captured from the R8-shrunk release build on an Android 16 emulator at 1080 x 2160 (exactly 2:1, the maximum aspect ratio Play accepts), with no text, frame or artwork added. Re-capture them from the release you actually ship. The earlier set were composited mockups (1080 x 2400, with an alpha channel) that showed screens and features the app does not have, and they were replaced.

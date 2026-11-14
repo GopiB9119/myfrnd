@@ -99,6 +99,7 @@
     <string name="notification_description">Gentle reminders while your phone is unlocked. Tap to open.</string>
     <string name="pause">Pause</string>
     <string name="privacy_footer">Your reminders stay on this device. No account. No ads.\nNot an alarm clock: Android may delay reminders.</string>
+    <string name="model_credit">3D character: \"Monochrome Moment\" by restore50, https://sketchfab.com/3d-models/monochrome-moment-5a509fea8432469b94b73a921f742e39\nLicensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/\nSimplified and rigged for this app.</string>
     <string name="selected">Selected</string>
     <string name="not_selected">Not selected</string>
 </resources>

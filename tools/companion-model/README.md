@@ -8,6 +8,14 @@ The shipped model comes from `monochrome-moment.zip` (file
 `source/Monochrome Moment (3).glb`, 22.8 MB, about 250,000 triangles). That zip is the
 original asset and is **not** committed.
 
+**Source and license:** ["Monochrome Moment"](https://sketchfab.com/3d-models/monochrome-moment-5a509fea8432469b94b73a921f742e39)
+by [restore50](https://sketchfab.com/restore50) on Sketchfab, licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The triangle count of the
+download (250,629) matches the published model (250.6k). CC BY 4.0 allows use, changes and
+commercial distribution as long as the author is credited, the license is linked, and the
+changes are mentioned. The app shows this credit at the bottom of the dashboard
+(`model_credit` in `strings.xml`). If you swap in another model, update that credit too.
+
 ## Run it
 
 Needs Node.js 20 or newer.

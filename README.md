@@ -81,8 +81,12 @@ The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned,
 - Increment `versionCode`/`versionName` for an actual store release; this working copy preserves the existing release identity.
 - Validate on physical low-end devices, API 26, OEM battery-management variants, TalkBack, large text, landscape, and an installed offline TTS voice.
 - Test the 3D companion on real phones, especially low-end ones. On the emulator the first frame after a cold start can take 5-14 s because the emulator does not cache compiled GPU shaders; phones normally cache them after the first run, but this is not yet measured. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
-- Confirm you have the rights to ship the 3D human model in a store build.
+- The 3D human model is CC BY 4.0 ("Monochrome Moment" by restore50, see [Credits](#credits)): shipping it in a store build is allowed as long as the credit stays in the app. Keep the dashboard credit line, and update it if you swap the model.
 - The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval or deployment has been performed. The work is on the branch `upgrade/production-hardening-20261107` and has not been merged into `main`.
+
+## Credits
+
+- 3D character: ["Monochrome Moment"](https://sketchfab.com/3d-models/monochrome-moment-5a509fea8432469b94b73a921f742e39) by [restore50](https://sketchfab.com/restore50), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Changes: simplified from about 250,000 to 50,000 triangles, textures re-encoded, and a small Hips/Spine/Chest/Head rig added (see [tools/companion-model](tools/companion-model/README.md)). The same credit is shown at the bottom of the app's dashboard.
 
 ## Research and implementation plan
 

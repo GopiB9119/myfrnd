@@ -170,6 +170,9 @@
         </LinearLayout>
         <TextView style="@style/BodyText" android:text="@string/privacy_footer"
             android:layout_marginTop="24dp" android:gravity="center" android:textSize="12sp" />
+        <TextView android:id="@+id/tvModelCredit" style="@style/BodyText" android:text="@string/model_credit"
+            android:layout_marginTop="12dp" android:gravity="center" android:textSize="11sp"
+            android:autoLink="web" />
     </LinearLayout>
 </ScrollView>
 </FrameLayout>
