@@ -791,7 +791,7 @@ class HumanCompanionView @JvmOverloads constructor(
     private fun wantsFrames(): Boolean =
         canRender() && (needsRedraw || !modelReady || motionAllowed || dragging || abs(userYaw) > 0.05f)
 
-    /** Calm idle motion (breathing, sway) looks the same at 30 fps and costs about half the power. */
+    /** Calm idle motion needs fewer frames; interaction and entrances still render at full rate. */
     private fun wantsFullFrameRate(): Boolean =
         needsRedraw || dragging || abs(userYaw) > 0.05f || walkingIn || displayMode == DisplayMode.THREAD_DROP ||
             clock - tapStart < FULL_RATE_SECONDS || clock - expressionStart < FULL_RATE_SECONDS ||
@@ -1201,7 +1201,7 @@ class HumanCompanionView @JvmOverloads constructor(
         /** Filament's default frame latency (2) plus one. */
         private const val FRAMES_UNTIL_VISIBLE = 3
         private const val FULL_RATE_SECONDS = 2.5f
-        private const val IDLE_FRAME_INTERVAL_NANOS = 30_000_000L
+        private const val IDLE_FRAME_INTERVAL_NANOS = 66_666_667L
         private const val SHADOW_EPSILON_PX = 0.25f
         private const val SHADOW_EPSILON_HOP = 1e-4f
     }
