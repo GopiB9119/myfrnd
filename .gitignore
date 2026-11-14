@@ -32,6 +32,10 @@ my_frnd_key
 *.aab
 app/release/
 
+# Website (site/) dependencies and build output
+site/node_modules/
+site/dist/
+
 # OS specific files
 .DS_Store
 Thumbs.db

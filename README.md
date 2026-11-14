@@ -2,6 +2,8 @@
 
 A native Android companion for gentle eye breaks, hydration nudges, and personal reminders, shown by a real-time 3D human. Kotlin + Android Views; Android 8.0 (API 26) and newer. No account, backend, ads, analytics, microphone, or network permission.
 
+**Website:** <https://gopib9119.github.io/myfrnd/>: an interactive 3D view of the companion, features, screenshots, the [privacy policy](https://gopib9119.github.io/myfrnd/privacy.html) and [data deletion](https://gopib9119.github.io/myfrnd/data-deletion.html) pages.
+
 ## 3D human companion
 
 - The dashboard hero and the on-screen overlay both draw the bundled 3D human (`app/src/main/assets/models/companion.glb`) with [Filament](https://github.com/google/filament) 1.75.1 (PBR renderer + glTF loader) into a transparent `TextureView`.
@@ -74,6 +76,20 @@ Local reports: [unit tests](app/build/reports/tests/testDebugUnitTest/index.html
 
 The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned, R8-shrunk) release variants, unit-tests, lints, and uploads debug APK/reports. Device tests are run separately on a test emulator; CI does not claim a device run.
 
+## Website
+
+The static website lives in [site/](site/) and is published to GitHub Pages by the [Website workflow](.github/workflows/pages.yml) on every push to `main` that touches the site, the 3D model, or the store screenshots.
+
+- No framework, cookies, analytics, or CDN. The 3D viewer is [`<model-viewer>`](https://modelviewer.dev/) 4.4.0, copied into the site at build time with its licenses (`vendor/LICENSES.txt`).
+- `site/build.mjs` takes the 3D model from `app/src/main/assets/models/companion.glb` and the screenshots from `play_store_assets/`, so the site always matches the app. It also makes the link-preview image, and fails if any page links to a missing file or anchor.
+- One-time setup: in the repository's **Settings > Pages**, set **Source** to **GitHub Actions**.
+
+```powershell
+cd site
+npm ci
+npm run build   # output in site/dist; set SITE_URL to change the canonical URL
+```
+
 ## Release checklist
 
 - Set all four environment variables: `MYFRND_KEYSTORE` (absolute path), `MYFRND_STORE_PASSWORD`, `MYFRND_KEY_ALIAS`, `MYFRND_KEY_PASSWORD`. None should be committed.
@@ -82,7 +98,8 @@ The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned,
 - Validate on physical low-end devices, API 26, OEM battery-management variants, TalkBack, large text, landscape, and an installed offline TTS voice.
 - Test the 3D companion on real phones, especially low-end ones. On the emulator the first frame after a cold start can take 5-14 s because the emulator does not cache compiled GPU shaders; phones normally cache them after the first run, but this is not yet measured. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
 - The 3D human model is CC BY 4.0 ("Monochrome Moment" by restore50, see [Credits](#credits)): shipping it in a store build is allowed as long as the credit stays in the app. Keep the dashboard credit line, and update it if you swap the model.
-- The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval or deployment has been performed. The work is on the branch `upgrade/production-hardening-20261107` and has not been merged into `main`.
+- The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval or deployment has been performed.
+- For the Play Console, use the website's [privacy policy](https://gopib9119.github.io/myfrnd/privacy.html) and [data deletion](https://gopib9119.github.io/myfrnd/data-deletion.html) URLs.
 
 ## Credits
 

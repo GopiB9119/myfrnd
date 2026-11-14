@@ -93,9 +93,11 @@ When filling out the **Data safety** section in Google Play Console:
    &rarr; Select: **N/A** (No data is collected or transmitted to external servers).
 3. **Do you provide a way for users to request that their data be deleted?**
    &rarr; Select: **Yes**
-   &rarr; Provide URL: Your Google Sites data deletion page (e.g., `https://sites.google.com/view/myfrnd-privacy/data-deletion`)
+   &rarr; Provide URL: `https://gopib9119.github.io/myfrnd/data-deletion.html`
 4. **Is your app target audience including children under 13?**
    &rarr; Select: **No** (Ages 13+)
+
+**Privacy policy URL** (App content > Privacy policy): `https://gopib9119.github.io/myfrnd/privacy.html`
 
 ---
 

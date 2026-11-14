@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>myfrnd: a friendly 3D companion for eye breaks, water and reminders</title>
+  <meta name="description" content="myfrnd is a free Android app with a friendly 3D companion. He reminds you to rest your eyes, drink water, and remember the things that matter. No account, no ads, works offline.">
+  <meta name="theme-color" content="#285C45">
+  <link rel="canonical" href="%SITE_URL%/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="myfrnd: a little care, a better day">
+  <meta property="og:description" content="A friendly 3D companion for Android that reminds you to rest your eyes, drink water, and remember the things that matter.">
+  <meta property="og:url" content="%SITE_URL%/">
+  <meta property="og:image" content="%SITE_URL%/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="module" src="vendor/model-viewer.min.js"></script>
+  <script type="module" src="main.js"></script>
+  <noscript><style>model-viewer { display: none; }</style></noscript>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="favicon.svg" alt="" width="34" height="34">myfrnd</a>
+      <nav class="nav" aria-label="Main">
+        <a href="#features">Features</a>
+        <a class="optional" href="#screenshots">Screenshots</a>
+        <a class="optional" href="#privacy">Privacy</a>
+        <a href="https://github.com/GopiB9119/myfrnd">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-card">
+        <div>
+          <p class="eyebrow">Your everyday companion</p>
+          <h1 id="hero-title">A little care.<br>A better day.</h1>
+          <p class="lead">myfrnd is a free Android app with a friendly 3D companion. He reminds you to rest your eyes, drink water, and remember the things that matter.</p>
+          <ul class="facts" aria-label="Quick facts">
+            <li>Android 8.0 or newer</li>
+            <li>No account</li>
+            <li>No ads</li>
+            <li>Works offline</li>
+          </ul>
+          <div class="buttons">
+            <a class="btn btn-primary" href="https://github.com/GopiB9119/myfrnd">Get it on GitHub</a>
+            <a class="btn btn-secondary" href="#features">See what it does</a>
+          </div>
+          <p class="note">Not on Google Play yet. You can build the app from its source code on GitHub.</p>
+        </div>
+
+        <figure class="viewer">
+          <model-viewer id="viewer3d" src="assets/companion.glb"
+            alt="The myfrnd 3D companion: a young man in a black T-shirt, dark jeans and white sneakers. Drag to turn him around."
+            camera-controls disable-zoom disable-pan touch-action="pan-y"
+            auto-rotate auto-rotate-delay="2500" rotation-per-second="18deg"
+            camera-orbit="0deg 84deg auto" min-camera-orbit="auto 70deg auto" max-camera-orbit="auto 95deg auto"
+            field-of-view="24deg" interaction-prompt="none"
+            shadow-intensity="1" shadow-softness="0.9"
+            environment-image="neutral" tone-mapping="neutral" exposure="1.05"
+            loading="eager">
+            <p class="loading" slot="poster">Loading the 3D model&hellip;</p>
+          </model-viewer>
+          <noscript><img class="viewer-fallback" src="assets/shots/shot-1.webp" width="540" height="1080" alt="The myfrnd dashboard with the 3D companion"></noscript>
+          <figcaption>Drag to turn him around. This is the same 3D model the app uses.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <h2 id="features-title">What myfrnd does</h2>
+        <p class="section-lead">Small, kind nudges while you use your phone. You choose how often.</p>
+        <div class="grid">
+          <article class="card">
+            <div class="icon" aria-hidden="true">👀</div>
+            <h3>Rest your eyes</h3>
+            <p>Every 15, 20, 30 or 45 minutes, he asks you to look at something about 20 feet away for 20 seconds.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true">💧</div>
+            <h3>Drink water</h3>
+            <p>A gentle nudge every 15, 30, 45 or 60 minutes to take a sip of water.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true">📝</div>
+            <h3>Your reminders</h3>
+            <p>Add your own reminders. Pick a quick time or choose an exact date and time.</p>
+            <ul class="chips" aria-label="Quick times">
+              <li>In 15 min</li><li>In 1 hour</li><li>Next 8 PM</li><li>Tomorrow 9 AM</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true">📱</div>
+            <h3>He visits your screen</h3>
+            <p>With your permission, he appears over other apps for a few seconds and then leaves on his own. Tap him to close it sooner.</p>
+            <ul class="chips" aria-label="Entrance styles">
+              <li>Surprise me</li><li>Drop in</li><li>Corner</li><li>Rise up</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true">🔊</div>
+            <h3>Speaks if you want</h3>
+            <p>Turn on "Speak reminders aloud" to hear reminders in an offline voice. It is off by default and never uses the microphone.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true">🌿</div>
+            <h3>Calm mode</h3>
+            <p>"Reduce motion" keeps your companion still and skips the entrance animations.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="companion" aria-labelledby="companion-title">
+      <div class="wrap split">
+        <div class="card">
+          <h2 id="companion-title">A companion that feels alive</h2>
+          <ul class="ticks">
+            <li>He breathes and shifts his weight while he waits.</li>
+            <li>He nods while he talks to you.</li>
+            <li>Tap him and he nods and tilts his head.</li>
+            <li>On an eye break, he leans back and looks into the distance.</li>
+            <li>Sparkles, water drops, an eye glow and sound waves match each reminder.</li>
+            <li>Try the mood buttons on the dashboard: Cheer, Water, Eyes, Focus and Drop.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Start in three steps</h2>
+          <ol class="steps">
+            <li><h3>Open myfrnd</h3><p>No sign-up. Your dashboard and companion are ready.</p></li>
+            <li><h3>Allow display over apps</h3><p>So he can visit you while you use other apps. You can pause anytime.</p></li>
+            <li><h3>Turn on your companion</h3><p>Tap "Preview on my screen" to meet him right away.</p></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots" aria-labelledby="shots-title">
+      <div class="wrap">
+        <h2 id="shots-title">Screenshots</h2>
+        <p class="section-lead">Real captures of the app. Tap a picture to see it full size.</p>
+        <ul class="shots">
+          <li><a href="assets/shots/shot-1.png"><img src="assets/shots/shot-1.webp" width="540" height="1080" loading="lazy" alt="Dashboard: 'A little care. A better day.' with the 3D companion, mood buttons and the Preview on my screen button"><span>Your companion</span></a></li>
+          <li><a href="assets/shots/shot-2.png"><img src="assets/shots/shot-2.webp" width="540" height="1080" loading="lazy" alt="Your daily rhythm: live countdowns for the water break and eye rest, and interval choices"><span>Eye and water timers</span></a></li>
+          <li><a href="assets/shots/shot-3.png"><img src="assets/shots/shot-3.webp" width="540" height="1080" loading="lazy" alt="The 3D companion drops onto the phone's home screen on a thread, with a message bubble"><span>He drops onto your screen</span></a></li>
+          <li><a href="assets/shots/shot-4.png"><img src="assets/shots/shot-4.webp" width="540" height="1080" loading="lazy" alt="Your reminders: three upcoming reminders with Edit and Delete buttons"><span>Your reminders</span></a></li>
+          <li><a href="assets/shots/shot-5.png"><img src="assets/shots/shot-5.webp" width="540" height="1080" loading="lazy" alt="The reminder editor with quick time choices"><span>Quick reminder times</span></a></li>
+          <li><a href="assets/shots/shot-6.png"><img src="assets/shots/shot-6.webp" width="540" height="1080" loading="lazy" alt="Make it yours: entrance styles, Speak reminders aloud, Reduce motion, and the privacy note"><span>Make it yours</span></a></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap">
+        <div class="card">
+          <h2 id="privacy-title">Private by design</h2>
+          <ul class="ticks">
+            <li>No account, no ads, no analytics, no trackers.</li>
+            <li>The app has no internet permission, so your reminders never leave your phone.</li>
+            <li>No microphone. Speech is optional and uses your phone's offline voice.</li>
+            <li>Delete one reminder in the app, or everything at once by clearing the app's storage.</li>
+          </ul>
+          <div class="buttons">
+            <a class="btn btn-secondary" href="privacy.html">Privacy policy</a>
+            <a class="btn btn-secondary" href="data-deletion.html">How to delete your data</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <h2 id="faq-title">Questions</h2>
+        <div class="faq">
+          <details>
+            <summary>Is myfrnd free?</summary>
+            <p>Yes. There are no ads and nothing to buy.</p>
+          </details>
+          <details>
+            <summary>Where can I get it?</summary>
+            <p>myfrnd is not on Google Play yet. The source code is on <a href="https://github.com/GopiB9119/myfrnd">GitHub</a>, and the README explains how to build and install it.</p>
+          </details>
+          <details>
+            <summary>Which phones does it work on?</summary>
+            <p>Android 8.0 or newer. On a phone's first launch, the 3D companion can take a moment to appear while the phone prepares its graphics.</p>
+          </details>
+          <details>
+            <summary>Can I use it as an alarm clock?</summary>
+            <p>No. Reminders show while your screen is on and unlocked, and Android may delay them. Please do not use myfrnd for medicine or anything urgent.</p>
+          </details>
+          <details>
+            <summary>Why does it ask to "display over other apps"?</summary>
+            <p>That is how your companion can appear for a few seconds while you use other apps. You can pause him anytime from the app or the notification.</p>
+          </details>
+          <details>
+            <summary>Does it use the internet or my microphone?</summary>
+            <p>No. The app has no internet permission and never uses the microphone.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="credits" class="credits" aria-labelledby="credits-title">
+      <div class="wrap">
+        <h2 id="credits-title">Credits</h2>
+        <p>3D character: <a href="https://sketchfab.com/3d-models/monochrome-moment-5a509fea8432469b94b73a921f742e39">"Monochrome Moment"</a> by <a href="https://sketchfab.com/restore50">restore50</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. We simplified it, re-encoded its textures and added a small rig so he can move.</p>
+        <p>The app draws him with <a href="https://github.com/google/filament">Filament</a> (Apache 2.0). This page shows him with <a href="https://modelviewer.dev/">&lt;model-viewer&gt;</a> (Apache 2.0) and <a href="https://threejs.org/">three.js</a> (MIT), served from this site. <a href="vendor/LICENSES.txt">Open-source licenses</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <nav aria-label="Footer">
+        <a href="privacy.html">Privacy policy</a>
+        <a href="data-deletion.html">Data deletion</a>
+        <a href="https://github.com/GopiB9119/myfrnd">GitHub</a>
+        <a href="mailto:dutypein@gmail.com">Contact</a>
+      </nav>
+      <p>&copy; 2026 myfrnd. This website uses no cookies and no analytics.</p>
+    </div>
+  </footer>
+</body>
+</html>
