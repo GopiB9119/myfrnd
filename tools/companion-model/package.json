@@ -1,0 +1,21 @@
+{
+  "name": "myfrnd-companion-model",
+  "private": true,
+  "description": "Turns a source human GLB into the optimized, rigged companion.glb shipped in the app.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node process_companion.mjs",
+    "inspect": "node inspect_companion.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5"
+  }
+}

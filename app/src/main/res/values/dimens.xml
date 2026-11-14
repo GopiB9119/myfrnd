@@ -2,4 +2,5 @@
 <resources>
     <dimen name="dashboard_padding">20dp</dimen>
     <dimen name="chip_row_fade">32dp</dimen>
+    <dimen name="dashboard_companion_height">250dp</dimen>
 </resources>

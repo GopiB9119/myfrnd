@@ -14,25 +14,26 @@ android {
         versionCode = 3
         versionName = "1.0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Filament is native code; skip 32-bit x86 (no real devices) to keep the APK small.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
-    val localKeyFile = rootProject.file("myfrnd_production_key.jks")
+    // Release signing comes from environment variables (CI) or ~/.gradle/gradle.properties
+    // (local builds). Passwords must never be written into this file.
     val signingValues = listOf(
         "MYFRND_KEYSTORE", "MYFRND_STORE_PASSWORD", "MYFRND_KEY_ALIAS", "MYFRND_KEY_PASSWORD"
-    ).associateWith { providers.environmentVariable(it).orNull }
+    ).associateWith { name ->
+        providers.environmentVariable(name).orNull ?: providers.gradleProperty(name).orNull
+    }
 
     signingConfigs {
-        create("release") {
-            if (signingValues.values.all { !it.isNullOrBlank() }) {
+        // Without all four values (e.g. CI without secrets) the release APK is built unsigned.
+        if (signingValues.values.all { !it.isNullOrBlank() }) {
+            create("release") {
                 storeFile = rootProject.file(signingValues.getValue("MYFRND_KEYSTORE")!!)
                 storePassword = signingValues["MYFRND_STORE_PASSWORD"]
                 keyAlias = signingValues["MYFRND_KEY_ALIAS"]
                 keyPassword = signingValues["MYFRND_KEY_PASSWORD"]
-            } else if (localKeyFile.exists()) {
-                storeFile = localKeyFile
-                storePassword = "Vamsi@298"
-                keyAlias = "myfrnd"
-                keyPassword = "Vamsi@298"
             }
         }
     }
@@ -82,6 +83,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Real-time 3D companion: Filament PBR renderer + glTF 2.0 loader.
+    implementation("com.google.android.filament:filament-android:1.75.1")
+    implementation("com.google.android.filament:gltfio-android:1.75.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

@@ -33,7 +33,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.wellness.overlay3d.R
 import com.wellness.overlay3d.databinding.ActivityMainBinding
 import com.wellness.overlay3d.databinding.ItemTaskReminderBinding
-import com.wellness.overlay3d.overlay.DevCompanionCanvasView
+import com.wellness.overlay3d.overlay.HumanCompanionView
 import com.wellness.overlay3d.service.CompanionRuntime
 import com.wellness.overlay3d.service.CompanionStatus
 import com.wellness.overlay3d.service.OverlayService
@@ -174,16 +174,16 @@ class MainActivity : AppCompatActivity() {
             if (!syncing) CompanionPreferences.setReducedMotion(this@MainActivity, checked)
         }
         val poses = listOf(
-            Triple(btnPoseHappy, R.string.demo_message, DevCompanionCanvasView.Expression.WINK_PLAYFUL),
-            Triple(btnPoseWater, R.string.water_message, DevCompanionCanvasView.Expression.HAPPY_WATER),
-            Triple(btnPoseEyes, R.string.eye_message, DevCompanionCanvasView.Expression.TIRED_EYES),
-            Triple(btnPoseTask, R.string.tasks_description, DevCompanionCanvasView.Expression.TASK_REMINDER),
-            Triple(btnPoseThread, R.string.demo_message, DevCompanionCanvasView.Expression.NORMAL)
+            Triple(btnPoseHappy, R.string.demo_message, HumanCompanionView.Expression.WINK_PLAYFUL),
+            Triple(btnPoseWater, R.string.water_message, HumanCompanionView.Expression.HAPPY_WATER),
+            Triple(btnPoseEyes, R.string.eye_message, HumanCompanionView.Expression.TIRED_EYES),
+            Triple(btnPoseTask, R.string.tasks_description, HumanCompanionView.Expression.TASK_REMINDER),
+            Triple(btnPoseThread, R.string.demo_message, HumanCompanionView.Expression.NORMAL)
         )
         poses.forEach { (button, text, expression) ->
             button.setOnClickListener {
                 liveDashboardCompanion.displayMode = if (button == btnPoseThread)
-                    DevCompanionCanvasView.DisplayMode.THREAD_DROP else DevCompanionCanvasView.DisplayMode.FULL_BODY
+                    HumanCompanionView.DisplayMode.THREAD_DROP else HumanCompanionView.DisplayMode.FULL_BODY
                 liveDashboardCompanion.currentExpression = expression
                 liveDashboardCompanion.isTalking = true
                 liveDashboardCompanion.triggerTapReaction()
@@ -193,6 +193,7 @@ class MainActivity : AppCompatActivity() {
                 poses.forEach { select(it.first, it.first == button) }
             }
         }
+        liveDashboardCompanion.dragToRotate = true
         liveDashboardCompanion.setOnClickListener {
             poses[tapIndex++ % poses.size].first.performClick()
         }

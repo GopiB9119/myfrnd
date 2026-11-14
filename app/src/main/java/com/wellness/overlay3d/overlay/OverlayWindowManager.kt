@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
@@ -29,7 +30,7 @@ class OverlayWindowManager(
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
     private var root: View? = null
-    private var character: DevCompanionCanvasView? = null
+    private var character: HumanCompanionView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var closed = false
@@ -105,25 +106,41 @@ class OverlayWindowManager(
             CompanionPreferences.POSITION_BOTTOM -> EntranceStyle.BOTTOM_SLIDE
             else -> EntranceStyle.entries.random()
         }
-        val view = LayoutInflater.from(context).inflate(R.layout.view_overlay_character, null)
-        val companion = view.findViewById<DevCompanionCanvasView>(R.id.devCompanionCanvasView)
+        val view = LayoutInflater.from(context).inflate(R.layout.view_overlay_character, null) as ViewGroup
+        val companion = view.findViewById<HumanCompanionView>(R.id.humanCompanionView)
         character = companion
+        if (style == EntranceStyle.THREAD_DROP || style == EntranceStyle.TOP_RIGHT_PEEK) {
+            // The window hangs from the top edge, so the companion leads and the bubble sits below.
+            view.removeView(companion)
+            view.addView(companion, 0)
+            // Tuck the bubble's top edge over the bottom of the 3D view, hiding where the body is cut off.
+            val bubble = view.findViewById<View>(R.id.speechBubbleContainer)
+            (bubble.layoutParams as ViewGroup.MarginLayoutParams).topMargin =
+                -(BUBBLE_OVERLAP_DP * context.resources.displayMetrics.density).toInt()
+        }
         companion.apply {
             reducedMotion = CompanionPreferences.isReducedMotion(context)
             displayMode = when (style) {
-                EntranceStyle.THREAD_DROP -> DevCompanionCanvasView.DisplayMode.THREAD_DROP
-                EntranceStyle.TOP_RIGHT_PEEK -> DevCompanionCanvasView.DisplayMode.TOP_RIGHT_PEEK
-                else -> DevCompanionCanvasView.DisplayMode.FULL_BODY
+                EntranceStyle.THREAD_DROP -> HumanCompanionView.DisplayMode.THREAD_DROP
+                EntranceStyle.TOP_RIGHT_PEEK -> HumanCompanionView.DisplayMode.TOP_RIGHT_PEEK
+                else -> HumanCompanionView.DisplayMode.FULL_BODY
+            }
+            walkDirection = if (style == EntranceStyle.RIGHT_TO_LEFT) -1 else 1
+            animationPhase = when (style) {
+                EntranceStyle.LEFT_TO_RIGHT, EntranceStyle.RIGHT_TO_LEFT -> HumanCompanionView.PHASE_WALK_IN
+                else -> HumanCompanionView.PHASE_IDLE
             }
             currentExpression = when (reason) {
-                OverlayReason.WATER_REMINDER -> DevCompanionCanvasView.Expression.HAPPY_WATER
-                OverlayReason.EYE_STRAIN -> DevCompanionCanvasView.Expression.TIRED_EYES
-                OverlayReason.WORK_TASK_REMINDER -> DevCompanionCanvasView.Expression.TASK_REMINDER
-                OverlayReason.GENERAL_TEST -> DevCompanionCanvasView.Expression.WINK_PLAYFUL
+                OverlayReason.WATER_REMINDER -> HumanCompanionView.Expression.HAPPY_WATER
+                OverlayReason.EYE_STRAIN -> HumanCompanionView.Expression.TIRED_EYES
+                OverlayReason.WORK_TASK_REMINDER -> HumanCompanionView.Expression.TASK_REMINDER
+                OverlayReason.GENERAL_TEST -> HumanCompanionView.Expression.WINK_PLAYFUL
             }
             contentDescription = context.getString(R.string.dismiss_reminder)
             setOnClickListener { dismiss() }
         }
+        // Transparent parts of the window still swallow touches, so any tap on it dismisses.
+        view.setOnClickListener { dismiss() }
         val title = context.getString(when (reason) {
             OverlayReason.WATER_REMINDER -> R.string.water_title
             OverlayReason.EYE_STRAIN -> R.string.eye_title
@@ -141,9 +158,12 @@ class OverlayWindowManager(
         val screen = context.resources.displayMetrics
         val width = (280 * density).toInt().coerceAtMost(screen.widthPixels)
         val height = (360 * density).toInt().coerceAtMost(screen.heightPixels - (48 * density).toInt())
+        val animate = ValueAnimator.areAnimatorsEnabled() && !companion.reducedMotion
+        // While the window waits for the 3D body it is invisible and must not swallow touches.
         val params = WindowManager.LayoutParams(width, height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT).apply {
             gravity = when (style) {
                 EntranceStyle.THREAD_DROP -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -151,6 +171,8 @@ class OverlayWindowManager(
                 else -> Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             }
             y = (24 * density).toInt()
+            // Fully transparent while waiting, so Android lets touches pass straight through it.
+            alpha = 0f
         }
         try {
             windowManager.addView(view, params)
@@ -161,24 +183,61 @@ class OverlayWindowManager(
         }
         root = view
         prepareVoice()
-        val animate = ValueAnimator.areAnimatorsEnabled() && !companion.reducedMotion
+        // The window alpha changes in the compositor right away, but the view's own redraw (spinner
+        // gone, body frame drawn) lands a frame later; keeping the view transparent until then means
+        // the first visible frame is always a fresh one, even when motion is reduced.
+        view.alpha = 0f
         if (animate) {
-            view.alpha = 0f
             when (style) {
                 EntranceStyle.THREAD_DROP, EntranceStyle.TOP_RIGHT_PEEK -> view.translationY = -height * 0.6f
                 EntranceStyle.BOTTOM_SLIDE -> view.translationY = height * 0.6f
                 EntranceStyle.LEFT_TO_RIGHT -> view.translationX = -width.toFloat()
                 EntranceStyle.RIGHT_TO_LEFT -> view.translationX = width.toFloat()
             }
-            view.animate().alpha(1f).translationX(0f).translationY(0f)
-                .setDuration(650L).setInterpolator(DecelerateInterpolator())
-                .withEndAction { speak(spokenText) }.start()
-        } else {
-            speak(spokenText)
         }
-        // Text remains readable even when TTS is absent, fails, or never calls back.
-        handler.postDelayed(timeout, (spokenText.length * 65L + 3_000L).coerceIn(7_000L, 18_000L))
+        // Appear once the 3D body is on screen (or after a short wait), never as an empty frame.
+        var entered = false
+        val enter = Runnable {
+            if (entered || root !== view || dismissing) return@Runnable
+            entered = true
+            companion.onRenderStateChanged = null
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            params.alpha = 1f
+            try {
+                windowManager.updateViewLayout(view, params)
+            } catch (error: IllegalArgumentException) {
+                Log.w(TAG, "Reminder window vanished before it could enter", error)
+                // Free the slot so the next reminder is not blocked by a window that is gone.
+                finishDismissal()
+                return@Runnable
+            }
+            if (animate) {
+                view.animate().alpha(1f).translationX(0f).translationY(0f)
+                    .setDuration(650L).setInterpolator(DecelerateInterpolator())
+                    .withEndAction { speak(spokenText) }.start()
+            } else {
+                // Reduced motion: no movement, only a short fade.
+                view.animate().alpha(1f).setDuration(REDUCED_MOTION_FADE_MS)
+                    .withEndAction { speak(spokenText) }.start()
+            }
+            scheduleTimeout(spokenText)
+        }
+        if (companion.renderState != HumanCompanionView.RenderState.LOADING) {
+            // The renderer already finished or failed while attaching; show it right away.
+            handler.post(enter)
+        } else {
+            companion.onRenderStateChanged = { state ->
+                if (state != HumanCompanionView.RenderState.LOADING) enter.run()
+            }
+        }
+        handler.postDelayed(enter, MAX_MODEL_WAIT_MS)
         return true
+    }
+
+    /** Text remains readable even when TTS is absent, fails, or never calls back. */
+    private fun scheduleTimeout(spokenText: String) {
+        handler.removeCallbacks(timeout)
+        handler.postDelayed(timeout, (spokenText.length * 65L + 3_000L).coerceIn(7_000L, 18_000L))
     }
 
     private fun attachmentFailed(error: RuntimeException): Boolean {
@@ -188,7 +247,7 @@ class OverlayWindowManager(
     }
 
     private fun speak(text: String) {
-        character?.animationPhase = "talk"
+        character?.animationPhase = HumanCompanionView.PHASE_TALK
         if (ttsReady && CompanionPreferences.isVoiceEnabled(context)) {
             if (tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, generation.toString()) == TextToSpeech.ERROR) {
                 Log.w(TAG, "Speech request rejected; keeping the text reminder")
@@ -238,5 +297,8 @@ class OverlayWindowManager(
 
     private companion object {
         const val TAG = "OverlayWindowManager"
+        const val MAX_MODEL_WAIT_MS = 1_500L
+        const val REDUCED_MOTION_FADE_MS = 160L
+        const val BUBBLE_OVERLAP_DP = 8
     }
 }

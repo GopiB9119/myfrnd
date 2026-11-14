@@ -1,8 +1,10 @@
 # Upgrade verification
 
-Verified locally on 2026-11-06 and 2026-11-07 against the upgraded working tree based on original commit `4873c66`. The second pass (2026-11-07) re-audited the release APK built from the project as found and a live Android 16 emulator with the REA reverse-engineering toolkit, fixed the defects it found, and re-measured release against release. This report distinguishes tested behavior from remaining release requirements. A third pass (iteration 2, below) closed six more audit items on the branch `upgrade/production-hardening-20261107`. The account on this machine (`GopiB9119`) has read-only access to `vamsib-298/myfrnd` (the push was refused with HTTP 403), so the branch was pushed to the fork `GopiB9119/myfrnd`, where the GitHub workflow passed (see below). Nothing was merged into `main`, signed or deployed.
+Verified locally on 2026-11-06 and 2026-11-07 against the upgraded working tree based on original commit `4873c66`. The second pass (2026-11-07) re-audited the release APK built from the project as found and a live Android 16 emulator with the REA reverse-engineering toolkit, fixed the defects it found, and re-measured release against release. This report distinguishes tested behavior from remaining release requirements. A third pass (iteration 2, below) closed six more audit items on the branch `upgrade/production-hardening-20261107`. The account on this machine (`GopiB9119`) has read-only access to `vamsib-298/myfrnd` (the push was refused with HTTP 403), so the branch was pushed to the fork `GopiB9119/myfrnd`, where the GitHub workflow passed (see below). Nothing was merged into `main`, signed or deployed. **Iteration 3 (2026-11-14, [below](#iteration-3-the-owners-3d-human-companion-2026-11-14)) replaced the 2D companion with the owner's 3D human model. Where it conflicts with earlier sections (Filament, native libraries, APK size, idle redraw, test counts), iteration 3 is current.**
 
 ## Result
+
+This table is the iteration 1–2 result. Iteration 3 now stands at 45 unit, 16 device and 2 pipeline tests passing, lint 0 errors and 27 warnings, a 19.9 MB release APK with Filament's native libraries, and 16 KB alignment passing with them (see its section).
 
 | Check | Result |
 | --- | --- |
@@ -74,6 +76,53 @@ Build runs, all from the project directory with `--no-daemon --max-workers=2`:
 5. The same build after the test fix: **BUILD SUCCESSFUL in 7 m 29 s; 30 unit tests and 17 connected tests passed; lint 0 errors, 34 warnings** (the same 18 KTX, 9 dependency and 7 single warnings listed above). The logs are `build-1-unit-lint.log` to `build-6-full-clean.log`; the files named `build-5` and `build-6` hold runs 4 and 5.
 
 A debug APK built incrementally during this pass was 3,928,712 B, but its entries differed from the iteration-1 build by only 3.5 KB. The rest was zip dead space left by incremental repackaging. The clean build gives 3,616,999 B (+1,299 B).
+
+## Iteration 3: the owner's 3D human companion (2026-11-14)
+
+The owner supplied a 3D human model (`monochrome-moment.zip` in the repository root; a still scan with no rig and no animation clips) and asked for it to replace the 2D companion on the dashboard and in the reminder overlay. This iteration does that. **It supersedes these earlier statements, which stay above as iteration 1–2 history:** the removal of Filament (gate 4), "no native libraries are bundled" (Result table), the 995 KB release APK (Deliverables), and the canvas idle-redraw table (gate 9). The work is uncommitted in the working tree of a fresh clone of `GopiB9119/myfrnd` (`main`, `55e54cd`).
+
+### What changed
+
+| Area | Change |
+| --- | --- |
+| Renderer | Google Filament 1.75.1 (`filament-android`, `gltfio-android`) draws the model into a transparent `TextureView` ([HumanCompanionView.kt](../app/src/main/java/com/wellness/overlay3d/overlay/HumanCompanionView.kt)). One engine is shared by the dashboard and the overlay and released 20 s after the last view detaches ([CompanionEngine.kt](../app/src/main/java/com/wellness/overlay3d/companion3d/CompanionEngine.kt)); lighting is in [StudioLighting.kt](../app/src/main/java/com/wellness/overlay3d/companion3d/StudioLighting.kt). 32-bit x86 is excluded from the native libraries (no real devices use it) |
+| Motion | The model has no clips, so [HumanRig.kt](../app/src/main/java/com/wellness/overlay3d/companion3d/HumanRig.kt) finds the Hips/Spine/Chest/Head joints the pipeline adds and the view animates them in code: breathing, idle sway, a stepping walk-in, talking nods, a tap hop and nod, a gesture for each of the five expressions, the top-right peek and the thread drop, and drag-to-spin that springs back. [AnimationDirector.kt](../app/src/main/java/com/wellness/overlay3d/companion3d/AnimationDirector.kt) blends clips for models that do have them. The 2D effects (water drop, sparkles, ground shadow) are anchored to the projected head, hand and ground positions |
+| Asset | [tools/companion-model](../tools/companion-model) is a reproducible Node pipeline: 22.8 MB scan → [companion.glb](../app/src/main/assets/models/companion.glb), 3,192,116 B, SHA-256 `1D16CAA2428BF0D9FA1E6F36BC04B4E26F4468077645807BB0C8D0121E76EB7A`; 50,000 triangles, 42,085 vertices, 1.898 m tall, auto-rigged, texture transforms baked into the UVs, baseline JPEG textures. Running it twice gives byte-identical output |
+| Overlay | The window waits invisible and untouchable until the body has been drawn (or 1.5 s), then enters; the bubble sits in a vertical stack so it cannot cover the body, even with large fonts |
+| Removed | `DevCompanionCanvasView.kt`, `img_companion_fullbody.webp`, `img_companion_portrait.webp` |
+
+### Defects found and fixed
+
+| # | Defect | Fix |
+| --- | --- | --- |
+| 1 | The body was invisible: on a surface that already existed, Filament's `UiHelper` reported 0 × 0, so the viewport stayed empty | The viewport is synced to the view size every frame in `updateCamera` |
+| 2 | With Reduce motion on, the overlay showed an empty bubble before the body | The view starts at alpha 0 and fades in over 160 ms once three frames containing the body have been accepted |
+| 3 | The overlay entered before the body was drawn and let touches fall through to the app below | The window stays at alpha 0 with `FLAG_NOT_TOUCHABLE` until the model leaves `LOADING` or 1.5 s pass |
+| 4 | The bubble's timeout was scheduled before the entrance, so long entrances shortened reading time | It starts after the entrance: (characters × 65 + 3,000) ms, clamped to 7–18 s |
+| 5 | A keystore password was hardcoded in `app/build.gradle.kts` | Signing reads `MYFRND_KEYSTORE`, `MYFRND_STORE_PASSWORD`, `MYFRND_KEY_ALIAS`, `MYFRND_KEY_PASSWORD` from the environment or `~/.gradle/gradle.properties`; without them the release build is unsigned (this also fixed the CI release build, which failed without secrets). **The old password is still in git history and must be rotated** |
+| 6 | A stray byte-order mark at the start of an overlay XML file | Removed |
+| 7 | Code review: a new `ColorGrading` (with its LUT) was created on every attach and never destroyed on the shared engine | Kept in a field and destroyed in `tearDownFilament` after the view |
+| 8 | Code review: the pipeline applied `KHR_texture_transform` rotation with the wrong sign | [uv_transform.mjs](../tools/companion-model/uv_transform.mjs) now matches Filament's `matrixFromUvTransform`; two `node --test` cases cover it, including the glTF specification's example. This model's rotation is 0, so the shipped asset is byte-identical |
+
+### Measurements (Android 16 emulator, 1080 x 2400, host GPU)
+
+| Check | Result |
+| --- | --- |
+| Model load | 1.0–1.3 s from attach to a usable model; baseline JPEG textures were about 20% faster than progressive in an A/B on the same emulator |
+| First frame with the body | 5–14 s on every cold launch on the emulator, which has no shader cache, so every material compiles again. Warm overlays reached "ready" 0.4–0.7 s after the Preview tap with no stall lines. **Must be checked on physical devices**, which cache compiled shaders |
+| Release APK | 19,922,498 B unsigned (was 995,270 B); the native libraries for arm64-v8a, armeabi-v7a and x86_64 make up most of the growth. Debug APK 24,820,272 B |
+| 16 KB page alignment | `zipalign -c -P 16` passed; all six `.so` files are stored uncompressed and have 16,384-byte `LOAD` alignment |
+| Release smoke test | The release APK, signed with the debug key for the test only, installed and started (`TotalTime` 1,191 ms on a quiet system; 4.4–10.4 s right after a cold boot). The log showed the model ready and "Companion on screen after 3 body frames"; the dashboard man, the five pose chips and their effects worked, so R8 kept everything Filament needs |
+
+### Tests
+
+- Unit: **45 passed**, 0 failures (30 before, plus `AnimationDirectorTest` 7, `CompanionModelAssetTest` 2 and `HumanRigTest` 6).
+- Device: **16 of 16 passed** on the emulator after the last code change. The two tests of the removed WebP images were deleted and `dashboardRendersThe3dCompanionModel` was added.
+- Pipeline: 2 of 2 passed (`npm test` in `tools/companion-model`).
+- Lint: **0 errors, 27 warnings**, none in the new 3D code (11 dependency notices, 9 KTX suggestions and the same 7 single warnings as before).
+- Build: `.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease` succeeded in 6 m 43 s.
+
+Hand testing as a user on the dashboard: tapping the man cycles his poses, each chip plays its gesture and effect, Preview shows the overlay with the man walking in and the bubble above or below him (never over him), and Reduce motion shows him still with a short fade. Once, a "System UI isn't responding" dialog and a scrolled page made a chip tap look wrong; it came from the emulator right after a cold boot (load average about 29, phone-process ANRs), and the same taps were correct when the system was quiet. Late in the session the emulator's display stopped returning frames (black and white screenshots, also for the launcher, with `glReadPixels` errors in the emulator's own log); it was restarted, as in iteration 1.
 
 ## Regression coverage
 
@@ -287,7 +336,7 @@ The artifacts are ignored build outputs, not committed binaries. A clean checkou
 1. **Signing ownership:** the original revision exposed signing passwords. The owner must rotate/reset the affected credentials appropriately, configure private signing, and increment the release version. No signing identity was replaced and no history was rewritten.
 2. **Real-device coverage:** every measurement in this report comes from an x86_64 Android 16 emulator. Profile startup, animation, memory and battery on representative physical devices, including low-end hardware, API 26, and OEM battery-management variants.
 3. **Accessibility and speech:** complete TalkBack checks and actual offline TTS playback with the installed engine/voice. Large-text/theme screenshots and contrast calculations are not substitutes. In particular, the two countdown views change their text and spoken description every second while the companion is on (they are not live regions), and how a screen reader treats that was not tested.
-4. **3D companion is a product decision:** the experimental Filament/GLB renderer was removed because the untracked stock model that switched the overlay onto it made the release build draw black polygons and stall the UI (measured above). If a 3D companion is a goal, reintroduce it deliberately: a licensed model, physical-device testing, and the roughly 21 MB of native libraries it costs. Copies of the three files as they were found (the renderer, `models/README.txt` and the stray model, which was never tracked in git) are in `removed-3d/` of the evidence folder. The committed renderer and README are also in git history (`4873c66`), but the committed renderer differs from the one that was built (13,814 B against 13,325 B).
+4. **3D companion on real hardware:** iteration 3 brought a 3D companion back deliberately, with the owner's model, Filament 1.75.1 and about 19 MB of native libraries. Iteration 1 had removed an earlier, different renderer because an untracked stock model made the release build draw black polygons and stall the UI; the new renderer was tested on the release build and does neither on the emulator. Still open: **confirm the model's license** for distribution, and measure the first frame (shader compilation took 5–14 s on every emulator cold launch), frame pacing and battery on physical devices, including low-end ones. Filament 1.80.1 exists if an upgrade is wanted. Copies of the iteration 1 files are in `removed-3d/` of the evidence folder.
 5. **Distribution:** review current Play target-API requirements, the special-use foreground-service declaration and the Data Safety answers; sign, upload, and obtain review with the owner's account. The six store screenshots are now real captures (see `play_store_assets/play_store_metadata.md`); the 512 px store icon and the feature graphic were not changed, and they show different artwork from the launcher icon and the in-app companion. Choose one brand identity before publishing.
 6. **Delivery limitations:** Android can delay or stop background work. Reminders are scheduled inside the foreground service (there is no `AlarmManager` fallback), so a device that kills the service and does not restart it will not deliver them until the app or a reboot restarts it. A plain process kill was recovered by the system on the emulator (see "Process kill while a reminder is pending"); Force Stop, OEM task killers and Doze were not tested. Tasks are one-shot: they are acknowledged on overlay attachment, not user completion, and there is no snooze, completion or repeat. Abrupt process failure is not an exactly-once transaction. Interval countdowns restart in full after process recreation (measured above). This remains a wellness aid, not a medical or emergency alarm.
 7. **Startup tuning:** no app-specific baseline profile was added (the release APK carries only the small AndroidX library profile that the build merges in, `assets/dexopt/baseline.prof`, 1,316 bytes). Forcing full ahead-of-time compilation (the upper bound a profile can reach) gave a 1,643 ms mean cold start (1,251-2,321 ms) against 2,022 ms (1,585-2,312 ms) for the default verify-only install on this emulator, and the ranges overlap. A Macrobenchmark on a physical device is the right way to decide.

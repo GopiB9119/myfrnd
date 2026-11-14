@@ -1,6 +1,15 @@
 # myfrnd
 
-A native Android companion for gentle eye breaks, hydration nudges, and personal reminders. Kotlin + Android Views; Android 8.0 (API 26) and newer. No account, backend, ads, analytics, microphone, or network permission.
+A native Android companion for gentle eye breaks, hydration nudges, and personal reminders, shown by a real-time 3D human. Kotlin + Android Views; Android 8.0 (API 26) and newer. No account, backend, ads, analytics, microphone, or network permission.
+
+## 3D human companion
+
+- The dashboard hero and the on-screen overlay both draw the bundled 3D human (`app/src/main/assets/models/companion.glb`) with [Filament](https://github.com/google/filament) 1.75.1 (PBR renderer + glTF loader) into a transparent `TextureView`.
+- The model is built from the source scan (`monochrome-moment.zip`, not committed) by a reproducible Node pipeline: 22.8 MB to 3.2 MB, auto-rigged with Hips/Spine/Chest/Head joints. See [tools/companion-model](tools/companion-model/README.md) to rebuild it or swap in another model.
+- The model has no animation clips, so motion is procedural (in `HumanCompanionView`, with joints found by `HumanRig`): breathing, small weight shifts, nods while talking, a nod and head tilt when tapped, and mood poses such as leaning back to look into the distance for an eye break. Mood effects (sparkles, water drops, eye glow, sound waves) are drawn on top. If a model with named clips (idle, wave, talk...) is used instead, `AnimationDirector` plays and cross-fades those clips.
+- One shared, reference-counted Filament engine (`CompanionEngine`) serves the dashboard and the overlay. It is released 20 s after the last user goes away.
+- The overlay window stays fully transparent and non-touchable until the body has drawn 3 real frames, then fades in with its speech bubble. With **Reduce motion** it uses a short fade only, without movement.
+- Drag the dashboard companion sideways to turn him; tap him to cycle moods.
 
 ## What changed
 
@@ -9,10 +18,9 @@ A native Android companion for gentle eye breaks, hydration nudges, and personal
 - Deadline-based scheduling instead of an eight-second polling loop. Water and eye intervals use monotonic elapsed time. Returning to the app, changing the entrance, or changing the other interval does not reset them.
 - Due tasks are shown sequentially, not all consumed before displaying the first one. A task is marked delivered only after its window attaches. Overdue tasks stay visible until shown or deleted.
 - Validated future dates, editable reminders, deletion confirmation, rotation-safe drafts, and explicit errors that preserve unreadable saved data.
-- Optional offline speech, off by default; reduced motion; lifecycle-gated canvas rendering; cancellable view animations instead of per-frame window-layout IPC; no forced garbage collection on dismissal.
-- Compatible API 36 build tooling, private service entry points, environment-only release signing, automated tests, and CI.
-- Release builds use R8 code and resource shrinking. The experimental Filament/GLB overlay was removed: on the test emulator it drew hard-edged black polygons and froze the UI for roughly a second each time it appeared. Release APK 26.3 MB to 1.0 MB, installed footprint 32.2 MB to 1.8 MB.
-- Hero artwork is WebP (2.2 MB to 0.2 MB) with its leftover background matte removed.
+- Optional offline speech, off by default; reduced motion; lifecycle-gated rendering; cancellable view animations instead of per-frame window-layout IPC; no forced garbage collection on dismissal.
+- Compatible API 36 build tooling, private service entry points, release signing from environment variables or `~/.gradle/gradle.properties` only (no passwords in the build file), automated tests, and CI.
+- Release builds use R8 code and resource shrinking. The old 2D canvas character and its WebP artwork were replaced by the 3D human above. The release APK is about 19.9 MB, mostly Filament native code for three ABIs (`arm64-v8a`, `armeabi-v7a`, `x86_64`; 32-bit x86 is skipped). All native libraries are 16 KB page-aligned.
 - The notifications button asks for permission on the first tap instead of jumping straight to Settings, and its label says what it will do (**Allow notifications** or **Open notification settings**).
 - Reminder time chips: **In 15 min**, **In 1 hour** (selected by default), **Next 8 PM** and **Tomorrow 9 AM**. The selected chip is highlighted and announced, and the times are whole minutes, so the saved time matches the time shown. Chip rows that run off screen fade at the edge, and the overlay card says which switch to turn on in Settings.
 
@@ -20,7 +28,7 @@ This is a deterministic wellness utility, not an AGI or medical device. No unmea
 
 ## Build and run
 
-Use Android Studio Meerkat or newer, JDK 17 (or Android Studio's JDK 21), Android SDK platform 36, and build tools 35.0.0. The wrapper pins Gradle 8.11.1; AGP is 8.10.1.
+Use Android Studio Meerkat or newer, JDK 17 (or Android Studio's JDK 21), Android SDK platform 36, and build tools 35.0.0 or newer. The wrapper pins Gradle 9.3.0; AGP is 8.10.1, Kotlin 2.0.21.
 
 On Windows PowerShell, from the repository root:
 
@@ -51,7 +59,7 @@ Alternatively, open this folder in Android Studio and run the `app` configuratio
 
 ## Verification
 
-See the [verification report](docs/VERIFICATION.md) for **47 passing tests** (30 unit, 17 device), packaging checks, measured release-to-release comparisons (cold start, installed size, overlay memory and stalls) with the method used, the APK checksum, and explicit release limitations. Emulator frame timing was too noisy to support any scroll-smoothness claim, and none is made.
+See the [verification report](docs/VERIFICATION.md) for **63 passing tests** (45 unit, 16 device, 2 model-pipeline), packaging checks, measured release-to-release comparisons (cold start, installed size, overlay memory and stalls) with the method used, the APK checksum, and explicit release limitations. Emulator frame timing was too noisy to support any scroll-smoothness claim, and none is made.
 
 ```powershell
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
@@ -72,7 +80,8 @@ The [CI workflow](.github/workflows/android.yml) builds the debug and (unsigned,
 - The original revision contained signing passwords. Treat those credentials as exposed; the signing-key owner must rotate/reset them as appropriate for Play App Signing. This upgrade does not replace your signing identity.
 - Increment `versionCode`/`versionName` for an actual store release; this working copy preserves the existing release identity.
 - Validate on physical low-end devices, API 26, OEM battery-management variants, TalkBack, large text, landscape, and an installed offline TTS voice.
-- The overlay uses the bundled canvas character only; there is no 3D/GLB renderer. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
+- Test the 3D companion on real phones, especially low-end ones. On the emulator the first frame after a cold start can take 5-14 s because the emulator does not cache compiled GPU shaders; phones normally cache them after the first run, but this is not yet measured. Keep each release's `mapping.txt` (the AAB embeds it for Play Console) so R8-shrunk crash traces can be read.
+- Confirm you have the rights to ship the 3D human model in a store build.
 - The six store screenshots in `play_store_assets/` are real captures of the release build. The 512 px store icon and the feature graphic were not changed and show different artwork from the launcher icon and the in-app companion; choose one brand identity before publishing. Review the special-use foreground-service declaration and Data Safety answers, sign with your own key, and obtain Play review. No store approval or deployment has been performed. The work is on the branch `upgrade/production-hardening-20261107` and has not been merged into `main`.
 
 ## Research and implementation plan
